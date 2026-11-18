@@ -28,7 +28,7 @@ It's picked up automatically - the cartoon placeholder is only used until then.
 - 120+ levels growing from 5×5 to 10×10, with a "Level up!" celebration at each new board size
 - Progress card on the home screen; All Levels screen with stars, best times and skipped levels
 - Daily Puzzle with a month calendar, current and best streak, and catch-up for missed days
-- 21 achievements, shown on the win screen as they unlock
+- 48 achievements in 7 sections (Levels, Skill, Speed, Daily, Golden, Rivals, Just for Fun), shown on the win screen as they unlock
 - 3 treats (lives); unlimited hints that explain *why*, unlimited skips, undo, clear
 - iOS-style Settings page: Auto/Light/Dark, sound on/off with Game sounds and Celebrations volume, auto-cross, timer, vibration (hidden on iPhone, which doesn't support it)
 - Backup code to copy progress to a new phone, and restore from it

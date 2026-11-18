@@ -592,10 +592,10 @@
     if (G.hints === 0) st.noHint++;
     if (spec.mode === 'free') st.free++;
     if (spec.mode === 'daily') st.daily++;
-    if (G.restarted) st.refillWins++;
+    if (G.restarted && !spec.golden) st.refillWins++; // golden levels have one treat, so restarts there don't count
     if (spec.golden) st.golden = (st.golden || 0) + 1;
     if (G.N === 10) st.big10++;
-    const unlocked = checkAchievements({ N: G.N, elapsed: G.elapsed, hints: G.hints, fullDay: spec.mode === 'daily' && dailyDoneCount(spec.day) === DAILY_COUNT });
+    const unlocked = checkAchievements({ N: G.N, elapsed: G.elapsed, hints: G.hints, flawless: G.hints === 0 && G.wrongPlaced === 0, golden: !!spec.golden, fullDay: spec.mode === 'daily' && dailyDoneCount(spec.day) === DAILY_COUNT });
     forgetProgress();
     persist();
     const puzzleKey = spec.mode === 'daily' ? 'daily:' + spec.id : null;
@@ -843,9 +843,66 @@
     { id: 'early', icon: '🌅', c: '#FFB861', name: 'Early Bird', desc: 'Solve a puzzle between 4 and 7 AM', test: (x) => x.hour !== undefined && x.hour >= 4 && x.hour < 7 },
     { id: 'free10', icon: '🎲', c: '#9BDDB0', name: 'Free Spirit', desc: 'Win 10 Free Play puzzles', test: (x) => x.st.free >= 10 },
   ];
+  ACHIEVEMENTS.push(
+    // Levels
+    { id: 'lv5', icon: '🐾', c: '#9BDDB0', name: 'Paw Prints', desc: 'Finish level 5', test: (x) => x.sv.level > 5 },
+    { id: 'lv75', icon: '😼', c: '#F2A93B', name: 'Top Cat', desc: 'Finish level 75', test: (x) => x.sv.level > 75 },
+    { id: 'size8', icon: '🔲', c: '#8ECDF7', name: 'Eight Is Great', desc: 'Unlock 8 × 8 boards', test: (x) => baseSize(x.sv.level) >= 8 },
+    { id: 'size9', icon: '🧱', c: '#959AE6', name: 'Nine Squared', desc: 'Unlock 9 × 9 boards', test: (x) => baseSize(x.sv.level) >= 9 },
+    { id: 'size10', icon: '🏰', c: '#B79BF2', name: 'Full House', desc: 'Unlock 10 × 10 boards', test: (x) => baseSize(x.sv.level) >= 10 },
+    { id: 'stars10', icon: '✨', c: '#FFD45C', name: 'Rising Star', desc: 'Earn 10 stars on levels', test: (x) => x.stars >= 10 },
+    { id: 'stars150', icon: '🌌', c: '#8F93E2', name: 'Constellation', desc: 'Earn 150 stars on levels', test: (x) => x.stars >= 150 },
+    { id: 'three10', icon: '🥇', c: '#FFC245', name: 'Triple Threat', desc: 'Get 3 stars on 10 different levels', test: (x) => Object.values(x.sv.levels).filter((r) => r.done && r.stars === 3).length >= 10 },
+    // Skill
+    { id: 'flawless25', icon: '🛡️', c: '#7FD3CC', name: 'Untouchable', desc: '25 flawless solves', test: (x) => x.st.flawless >= 25 },
+    { id: 'nohint50', icon: '🎓', c: '#B79BF2', name: 'Big Brain', desc: 'Solve 50 puzzles without a hint', test: (x) => x.st.noHint >= 50 },
+    { id: 'sharp8', icon: '👀', c: '#8CB8F5', name: 'Sharp Eyes', desc: 'Flawless on an 8 × 8 or bigger', test: (x) => !!x.flawless && x.N >= 8 },
+    { id: 'perfect10', icon: '💯', c: '#FF8E80', name: 'Perfect Pounce', desc: 'Flawless on a 10 × 10', test: (x) => !!x.flawless && x.N === 10 },
+    // Speed
+    { id: 'speed5', icon: '⚡️', c: '#FFD45C', name: 'Lightning Paws', desc: 'Solve a 5 × 5 in under 15 seconds, no hints', test: (x) => x.N === 5 && x.elapsed < 15 && x.hints === 0 },
+    { id: 'speed7', icon: '🏃', c: '#FFB861', name: 'Speedy Whiskers', desc: 'Solve a 7 × 7 in under 1 minute, no hints', test: (x) => x.N === 7 && x.elapsed < 60 && x.hints === 0 },
+    { id: 'speed10', icon: '🚀', c: '#8ECDF7', name: 'Rocket Cat', desc: 'Solve a 10 × 10 in under 5 minutes, no hints', test: (x) => x.N === 10 && x.elapsed < 300 && x.hints === 0 },
+    // Daily
+    { id: 'daily25', icon: '🗓️', c: '#7FD3CC', name: 'Regular', desc: 'Solve 25 daily puzzles', test: (x) => x.st.daily >= 25 },
+    { id: 'daily100', icon: '📆', c: '#2A9D96', name: 'Daily Devotee', desc: 'Solve 100 daily puzzles', test: (x) => x.st.daily >= 100 },
+    { id: 'hattrick', icon: '🎩', c: '#959AE6', name: 'Hat Trick', desc: 'Solve all 10 dailies on 3 different days', test: (x) => fullDailyDays() >= 3 },
+    { id: 'streak14', icon: '🔥', c: '#FF6B5B', name: 'Fortnight Feline', desc: 'Reach a 14-day daily streak', test: (x) => (x.sv.daily.best || 0) >= 14 },
+    // Golden
+    { id: 'golden10', icon: '🏅', c: '#F2C14E', name: 'Golden Era', desc: 'Clear 10 golden treat levels', test: (x) => (x.st.golden || 0) >= 10 },
+    { id: 'puregold', icon: '🪙', c: '#FFC245', name: 'Pure Gold', desc: 'Clear a golden level without a hint', test: (x) => !!x.golden && x.hints === 0 },
+    // Rivals
+    { id: 'rivals', icon: '🤝', c: '#F58BB4', name: 'Friendly Rivals', desc: 'Join the leaderboard with someone else', test: (x) => x.lb && x.lb.players >= 2 },
+    { id: 'beatrival', icon: '😎', c: '#F58BB4', name: 'Bragging Rights', desc: 'Beat your rival on a daily puzzle', test: (x) => x.lb && x.lb.wins >= 1 },
+    { id: 'champion', icon: '🏆', c: '#FFC245', name: 'Daily Champion', desc: 'Win a whole day against your rival', test: (x) => x.lb && x.lb.dayWins >= 1 },
+  );
+  const ACH_CATS = [
+    ['Levels', ['first', 'lv5', 'lv10', 'size7', 'lv25', 'size8', 'lv50', 'size9', 'lv75', 'size10', 'lv100', 'big10', 'stars10', 'stars50', 'stars150', 'three10']],
+    ['Skill', ['flawless', 'flawless10', 'flawless25', 'nohint10', 'nohint50', 'sharp8', 'perfect10']],
+    ['Speed', ['speed5', 'speed6', 'speed7', 'speed8', 'speed10']],
+    ['Daily', ['daily1', 'daily25', 'daily100', 'daily10', 'hattrick', 'streak3', 'streak7', 'streak14', 'streak30']],
+    ['Golden', ['golden1', 'golden5', 'golden10', 'puregold']],
+    ['Rivals', ['rivals', 'beatrival', 'champion']],
+    ['Just for Fun', ['refill', 'night', 'early', 'free10']],
+  ];
+  function fullDailyDays() {
+    const per = {};
+    for (const k of Object.keys(save.daily.done)) { const d = k.split('#')[0]; if (k.includes('#')) per[d] = (per[d] || 0) + 1; }
+    return Object.values(per).filter((n) => n >= DAILY_COUNT).length;
+  }
+  // leaderboard facts for the Rivals achievements
+  function lbFacts() {
+    if (!lbReady()) return null;
+    const h = headToHead(), me = save.lb.name;
+    return { players: h.players.length, wins: h.wins[me] || 0, dayWins: h.dayWins[me] || 0 };
+  }
+  // achievements earned outside a win (e.g. after syncing the leaderboard) show as a toast
+  function checkAchievementsQuietly() {
+    const fresh = checkAchievements();
+    if (fresh.length) { persist(); toast('🏆 Achievement unlocked: ' + fresh.map((a) => a.name).join(', ')); if ($('#screen-home').classList.contains('active')) renderHome(); }
+  }
   function totalStars() { return Object.values(save.levels).reduce((t, r) => t + (r.done ? r.stars || 0 : 0), 0); }
   function checkAchievements(ctx) {
-    const x = Object.assign({ st: save.stats, sv: save, stars: totalStars(), hour: new Date().getHours() }, ctx || {});
+    const x = Object.assign({ st: save.stats, sv: save, stars: totalStars(), hour: new Date().getHours(), lb: lbFacts() }, ctx || {});
     const fresh = [];
     for (const a of ACHIEVEMENTS) {
       if (save.achievements[a.id]) continue;
@@ -862,12 +919,20 @@
       return '<div class="ach-row' + (when ? '' : ' locked') + '"><span class="ach-icon" style="--c:' + a.c + '">' + (when ? a.icon : '🔒') + '</span>' +
         '<div class="label">' + a.name + '<small>' + a.desc + '</small></div>' + (when ? '<span class="ach-date">' + shortDate(when) + '</span>' : '') + '</div>';
     };
-    const unlocked = ACHIEVEMENTS.filter((a) => save.achievements[a.id]);
-    const locked = ACHIEVEMENTS.filter((a) => !save.achievements[a.id]);
+    const byId = Object.fromEntries(ACHIEVEMENTS.map((a) => [a.id, a]));
+    const placed = new Set(ACH_CATS.flatMap(([, ids]) => ids));
+    const cats = ACH_CATS.concat([['More', ACHIEVEMENTS.filter((a) => !placed.has(a.id)).map((a) => a.id)]]);
+    let sections = '';
+    for (const [title, ids] of cats) {
+      const list = ids.map((id) => byId[id]).filter(Boolean);
+      if (!list.length) continue;
+      // unlocked first, keeping the natural order within each part
+      const ordered = list.filter((a) => save.achievements[a.id]).concat(list.filter((a) => !save.achievements[a.id]));
+      const n = list.filter((a) => save.achievements[a.id]).length;
+      sections += '<div class="group-label ach-cat"><span>' + title + '</span><span>' + n + ' / ' + list.length + '</span></div><div class="group">' + ordered.map(row).join('') + '</div>';
+    }
     $('#ach-body').innerHTML =
-      '<div class="ach-summary"><div class="ring" style="--p:' + Math.round((got / ACHIEVEMENTS.length) * 100) + '"><span>' + got + '</span></div><div><b>' + got + ' of ' + ACHIEVEMENTS.length + ' unlocked</b><small>Keep solving to collect them all</small></div></div>' +
-      (unlocked.length ? '<div class="group-label">Unlocked</div><div class="group">' + unlocked.map(row).join('') + '</div>' : '') +
-      (locked.length ? '<div class="group-label">Still to find</div><div class="group">' + locked.map(row).join('') + '</div>' : '');
+      '<div class="ach-summary"><div class="ring" style="--p:' + Math.round((got / ACHIEVEMENTS.length) * 100) + '"><span>' + got + '</span></div><div><b>' + got + ' of ' + ACHIEVEMENTS.length + ' unlocked</b><small>Keep solving to collect them all</small></div></div>' + sections;
     showScreen('achievements');
   }
   function shortDate(str) {
@@ -1095,6 +1160,7 @@
           save.lb.since = rows[rows.length - 1].created_at;
         }
         save.lb.lastSync = Date.now();
+        setTimeout(checkAchievementsQuietly, 0);
         persist();
         return true;
       } catch (e) { return false; } finally { lbBusy = null; }

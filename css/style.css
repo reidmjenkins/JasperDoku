@@ -576,3 +576,5 @@ html.dark .level-tile.golden small { color: #FFD45C; }
 .btn.primary.play-btn.golden { background: linear-gradient(145deg, #FFC93C, #E8A400); color: #4A3200; }
 .win.golden { background: radial-gradient(circle at 50% 30%, rgba(255, 201, 60, .7), rgba(0, 0, 0, .88) 70%); }
 .win.golden .win-face { box-shadow: 0 0 0 6px #FFC93C, 0 0 70px rgba(255, 201, 60, .95); }
+.ach-cat { display: flex; justify-content: space-between; }
+.ach-cat span:last-child { font-variant-numeric: tabular-nums; }
