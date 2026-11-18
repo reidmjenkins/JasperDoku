@@ -20,11 +20,11 @@
 
   // ---------------------------------------------------------------- Jasper's face
   // Drop a square photo at assets/jasper.jpg (or .png) and it is used everywhere.
-  let jasperSrc = 'assets/jasper-placeholder.svg';
+  let jasperSrc = 'assets/jasper.png';
   function findJasperPhoto() {
     const tries = ['assets/jasper.png', 'assets/jasper.jpg', 'assets/jasper.jpeg', 'assets/jasper.webp'];
     (function next(i) {
-      if (i >= tries.length) return;
+      if (i >= tries.length) { jasperSrc = jasperFullSrc = 'assets/jasper-placeholder.svg'; document.body.classList.remove('has-photo'); paintJasperImages(); return; }
       const img = new Image();
       img.onload = () => { jasperSrc = tries[i]; jasperFullSrc = tries[i] === 'assets/jasper.png' ? 'assets/jasper-full.png' : tries[i]; document.body.classList.add('has-photo'); paintJasperImages(); if (G) renderCells(true); };
       img.onerror = () => next(i + 1);
@@ -32,7 +32,7 @@
     })(0);
   }
   // Big profile circles show Jasper's whole head (ears too); board pieces use the close-up face.
-  let jasperFullSrc = 'assets/jasper-placeholder.svg';
+  let jasperFullSrc = 'assets/jasper-full.png';
   function paintJasperImages() {
     document.querySelectorAll('.jasper-img').forEach((el) => { el.src = el.closest('.piece') ? jasperSrc : jasperFullSrc; });
   }
@@ -51,6 +51,7 @@
     seenTutorial: false,
     stats: { wins: 0, flawless: 0, noHint: 0, free: 0, daily: 0, refillWins: 0, big10: 0 },
     achievements: {},
+    lb: { name: '', room: '', rows: [], since: null, pending: [] },
   });
   let save = load();
   function load() {
@@ -58,7 +59,7 @@
       const raw = localStorage.getItem(STORE_KEY);
       if (raw) {
         const d = defaults(), s = JSON.parse(raw);
-        return Object.assign(d, s, { settings: Object.assign(d.settings, s.settings || {}), daily: Object.assign(d.daily, s.daily || {}), stats: Object.assign(d.stats, s.stats || {}), achievements: s.achievements || {} });
+        return Object.assign(d, s, { settings: Object.assign(d.settings, s.settings || {}), daily: Object.assign(d.daily, s.daily || {}), stats: Object.assign(d.stats, s.stats || {}), achievements: s.achievements || {}, lb: Object.assign(d.lb, s.lb || {}) });
       }
     } catch (e) { /* storage unavailable - play without saving */ }
     return defaults();
@@ -546,7 +547,9 @@
     const unlocked = checkAchievements({ N: G.N, elapsed: G.elapsed, hints: G.hints });
     forgetProgress();
     persist();
-    setTimeout(() => showWin(stars, { milestone, unlocked }), 450);
+    const puzzleKey = spec.mode === 'level' ? 'level:' + spec.id : spec.mode === 'daily' ? 'daily:' + spec.id : null;
+    if (puzzleKey) lbQueue(puzzleKey, G.elapsed, G.wrongPlaced, G.hints);
+    setTimeout(() => { showWin(stars, { milestone, unlocked }); if (puzzleKey) lbWinCompare(puzzleKey, G.elapsed); }, 450);
   }
 
   const WIN_TITLES = ['Jasper approves!', 'Purrfect!', 'Treats for everyone!', 'Nap spot secured!', 'Clever human!'];
@@ -559,6 +562,7 @@
     ms.hidden = !info.milestone;
     if (info.milestone) ms.innerHTML = '<span class="ms-grid" style="--n:' + info.milestone + '"></span><div><b>' + info.milestone + ' × ' + info.milestone + ' boards unlocked</b><small>Bigger boards, trickier puzzles</small></div>';
     const ub = $('#win-badges');
+    $('#win-rival').innerHTML = '';
     ub.innerHTML = (info.unlocked || []).length ? '<small class="wb-label">New achievement' + (info.unlocked.length > 1 ? 's' : '') + '</small><div class="wb-chips">' + info.unlocked.map((a) => '<span class="win-badge"><i>' + a.icon + '</i><b>' + a.name + '</b></span>').join('') + '</div>' : '';
     $('#win').classList.toggle('busy', !!(info.milestone || (info.unlocked || []).length));
     $('#win-stars').innerHTML = [1, 2, 3].map((n) => '<span class="' + (n <= stars ? '' : 'off') + '">★</span>').join('');
@@ -658,6 +662,7 @@
       : (last - save.level + 1) + ' more until ' + (size + 1) + ' × ' + (size + 1) + ' boards' + (skipped ? ' · ' + skipped + ' skipped' : '');
     $('#home-size').textContent = size + ' × ' + size;
     $('#home-date').textContent = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+    $('#home-lb-sub').textContent = homeLbSub();
     $('#home-ach-sub').textContent = Object.keys(save.achievements).length + ' of ' + ACHIEVEMENTS.length + ' unlocked';
   }
   function renderLevels() {
@@ -727,6 +732,13 @@
       sw('timer', 'Show timer') +
       (canVibrate ? sw('vibrate', 'Vibration') : '') + '</div>' +
 
+      '<div class="group-label">Leaderboard</div>' +
+      '<div class="group">' +
+      '<label class="set-row input-row"><span class="label">Your name</span><input id="lb-name" maxlength="24" placeholder="e.g. Reid" value="' + escapeHtml(save.lb.name) + '" autocomplete="off"></label>' +
+      '<label class="set-row input-row"><span class="label">Family code</span><input id="lb-room" maxlength="40" placeholder="jasper-…" value="' + escapeHtml(save.lb.room) + '" autocomplete="off" autocapitalize="off" spellcheck="false"></label>' +
+      '<button class="set-row link-row" data-action="lb-join"><span class="label">' + (lbReady() ? 'Save & Sync' : 'Join Leaderboard') + '</span><span class="lb-status" id="lb-status">' + lbStatusText() + '</span></button>' +
+      '</div>' +
+      '<div class="group-foot">Use the same family code on both phones. Only your name and puzzle times are shared.</div>' +
       '<div class="group-label">Progress</div>' +
       '<div class="group">' +
       '<button class="set-row link-row" data-action="backup-copy"><span class="label">Copy Backup Code</span><svg class="chev" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
@@ -951,6 +963,172 @@
     }
   }
 
+  // ---------------------------------------------------------------- leaderboard (Supabase)
+  const CFG = window.JASPER_CONFIG || {};
+  const lbConfigured = () => !!(CFG.supabaseUrl && CFG.supabaseKey);
+  const lbReady = () => lbConfigured() && !!save.lb.name && !!save.lb.room;
+  function escapeHtml(t) { return String(t || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+  function lbStatusText() {
+    if (!lbConfigured()) return 'Not set up yet';
+    if (!lbReady()) return '';
+    return save.lb.lastSync ? 'Synced ' + new Date(save.lb.lastSync).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : 'Connected';
+  }
+  async function rpc(fn, body) {
+    const headers = { 'Content-Type': 'application/json', apikey: CFG.supabaseKey };
+    if (!/^sb_/.test(CFG.supabaseKey)) headers.Authorization = 'Bearer ' + CFG.supabaseKey; // older "anon" keys
+    const res = await fetch(CFG.supabaseUrl.replace(/\/$/, '') + '/rest/v1/rpc/' + fn, { method: 'POST', headers, body: JSON.stringify(body) });
+    const text = await res.text();
+    if (!res.ok) throw new Error(text || res.status);
+    return text ? JSON.parse(text) : null;
+  }
+  function lbQueue(puzzle, time, mistakes, hints) {
+    if (!save.lb.room || !save.lb.name) return;
+    save.lb.pending.push({ puzzle, time: Math.max(1, time), mistakes, hints });
+    persist();
+    lbSync();
+  }
+  let lbBusy = null;
+  function lbSync(force) {
+    if (!lbReady()) return Promise.resolve(false);
+    if (lbBusy && !force) return lbBusy;
+    lbBusy = (async () => {
+      try {
+        // send anything waiting (works later if the phone was offline)
+        while (save.lb.pending.length) {
+          const p = save.lb.pending[0];
+          await rpc('submit_score', { p_room: save.lb.room, p_player: save.lb.name, p_puzzle: p.puzzle, p_time: p.time, p_mistakes: p.mistakes, p_hints: p.hints });
+          save.lb.pending.shift(); persist();
+        }
+        const rows = await rpc('get_scores', { p_room: save.lb.room, p_since: save.lb.since || '1970-01-01T00:00:00Z' });
+        if (rows && rows.length) {
+          save.lb.rows = save.lb.rows.concat(rows.map((r) => [r.player, r.puzzle, r.time_sec, r.mistakes, r.hints, r.created_at]));
+          save.lb.since = rows[rows.length - 1].created_at;
+        }
+        save.lb.lastSync = Date.now();
+        persist();
+        return true;
+      } catch (e) { return false; } finally { lbBusy = null; }
+    })();
+    return lbBusy;
+  }
+  async function lbJoin() {
+    const name = ($('#lb-name').value || '').trim(), room = ($('#lb-room').value || '').trim();
+    const st = $('#lb-status');
+    if (!lbConfigured()) { st.textContent = 'Not set up yet'; return; }
+    if (!name || !room) { st.textContent = 'Enter both'; return; }
+    st.textContent = 'Checking…';
+    try {
+      const ok = await rpc('check_room', { p_room: room });
+      if (!ok) { st.textContent = 'Code not found'; return; }
+      const changedRoom = room !== save.lb.room;
+      save.lb.name = name; save.lb.room = room;
+      if (changedRoom) { save.lb.rows = []; save.lb.since = null; }
+      persist();
+      await lbSync(true);
+      st.textContent = 'Connected ✓';
+      toast('Leaderboard connected');
+    } catch (e) { st.textContent = 'No connection'; }
+  }
+
+  // best time per player per puzzle
+  function lbBest() {
+    const best = {}; // puzzle -> player -> {t, at}
+    for (const [player, puzzle, t, , , at] of save.lb.rows) {
+      const p = (best[puzzle] = best[puzzle] || {});
+      if (!p[player] || t < p[player].t) p[player] = { t, at };
+      p[player].last = p[player].last && p[player].last > at ? p[player].last : at;
+    }
+    return best;
+  }
+  function lbPlayers() {
+    const set = new Set(save.lb.rows.map((r) => r[0]));
+    if (save.lb.name) set.add(save.lb.name);
+    const me = save.lb.name;
+    return [...set].sort((a, b) => (a === me ? -1 : b === me ? 1 : a.localeCompare(b)));
+  }
+  function puzzleLabel(key) {
+    const [kind, id] = key.split(':');
+    return kind === 'level' ? 'Level ' + id : 'Daily · ' + shortDate(id);
+  }
+  function headToHead() {
+    const best = lbBest(), players = lbPlayers(), wins = {};
+    players.forEach((p) => { wins[p] = 0; });
+    let shared = 0;
+    for (const key in best) {
+      const ps = Object.keys(best[key]);
+      if (ps.length < 2) continue;
+      shared++;
+      const top = ps.reduce((a, b) => (best[key][a].t <= best[key][b].t ? a : b));
+      const tie = ps.filter((p) => best[key][p].t === best[key][top].t).length > 1;
+      if (!tie) wins[top] = (wins[top] || 0) + 1;
+    }
+    return { wins, shared, players };
+  }
+  const avatar = (name, k) => '<span class="lb-av" style="--c:' + ['#2A9D96', '#F58BB4', '#8CB8F5', '#FFB938'][k % 4] + '">' + escapeHtml((name || '?').charAt(0).toUpperCase()) + '</span>';
+
+  function openLeaderboard() { renderLeaderboard(); showScreen('leaderboard'); lbSync().then((ok) => { if (ok) renderLeaderboard(); }); }
+  function renderLeaderboard() {
+    const body = $('#lb-body');
+    if (!lbReady()) {
+      body.innerHTML = '<div class="lb-empty"><div class="lb-empty-icon">🏆</div><b>Race each other</b><p>Add your name and family code in Settings on both phones. Then every level and daily puzzle you finish shows up here.</p><button class="btn primary" data-action="settings">Open Settings</button></div>';
+      return;
+    }
+    const { wins, shared, players } = headToHead();
+    const best = lbBest();
+    const me = save.lb.name;
+    const today = 'daily:' + todayStr();
+    // scoreboard
+    let html = '<div class="lb-score">' + players.slice(0, 2).map((p, k) =>
+      '<div class="lb-player">' + avatar(p, k) + '<b>' + escapeHtml(p) + (p === me ? ' <small>(you)</small>' : '') + '</b><strong>' + (wins[p] || 0) + '</strong><small>wins</small></div>').join('<div class="lb-vs">vs</div>') +
+      (players.length < 2 ? '<div class="lb-vs">vs</div><div class="lb-player waiting">' + avatar('?', 1) + '<b>Waiting…</b><small>Join with the same family code</small></div>' : '') + '</div>';
+    html += '<div class="group-foot center">' + shared + ' puzzle' + (shared === 1 ? '' : 's') + ' you\'ve both finished · faster time wins</div>';
+    // today's daily
+    html += '<div class="group-label">Today\'s Daily</div><div class="group">' + players.slice(0, 4).map((p, k) => {
+      const r = best[today] && best[today][p];
+      const fastest = r && Object.values(best[today]).every((o) => o.t >= r.t) && Object.keys(best[today]).length > 1;
+      return '<div class="set-row">' + avatar(p, k) + '<span class="label">' + escapeHtml(p) + '</span><span class="lb-time' + (r ? '' : ' none') + '">' + (fastest ? '👑 ' : '') + (r ? fmtTime(r.t) : 'Not yet') + '</span></div>';
+    }).join('') + '</div>';
+    // recent battles
+    const keys = Object.keys(best).sort((a, b) => {
+      const la = Math.max(...Object.values(best[a]).map((o) => +new Date(o.last || o.at)));
+      const lb = Math.max(...Object.values(best[b]).map((o) => +new Date(o.last || o.at)));
+      return lb - la;
+    }).slice(0, 30);
+    html += '<div class="group-label">Recent Puzzles</div>';
+    if (!keys.length) html += '<div class="group"><div class="set-row"><span class="label lb-muted">No times yet. Finish a level or the daily puzzle!</span></div></div>';
+    else html += '<div class="group">' + keys.map((key) => {
+      const entries = players.map((p, k) => ({ p, k, r: best[key][p] })).filter((o) => o.r);
+      const min = Math.min(...entries.map((o) => o.r.t));
+      const multi = entries.length > 1;
+      return '<div class="lb-row"><span class="label">' + puzzleLabel(key) + '</span><div class="lb-times">' + players.slice(0, 2).map((p, k) => {
+        const r = best[key][p];
+        return '<span class="lb-chip' + (r && multi && r.t === min ? ' fastest' : '') + (r ? '' : ' none') + '">' + avatar(p, k) + (r ? fmtTime(r.t) : '–') + '</span>';
+      }).join('') + '</div></div>';
+    }).join('') + '</div>';
+    html += '<button class="btn ghost lb-refresh" data-action="lb-refresh">Refresh</button>';
+    html += '<div class="group-foot center">' + lbStatusText() + (save.lb.pending.length ? ' · ' + save.lb.pending.length + ' time(s) waiting to send' : '') + '</div>';
+    body.innerHTML = html;
+  }
+  async function lbWinCompare(key, myTime) {
+    if (!lbReady()) return;
+    await lbSync();
+    const best = lbBest()[key] || {};
+    const me = save.lb.name;
+    const others = Object.keys(best).filter((p) => p !== me);
+    if (!others.length || $('#win').hidden) return;
+    $('#win-rival').innerHTML = others.slice(0, 2).map((p) => {
+      const d = best[p].t - myTime;
+      const msg = d > 0 ? 'You beat ' + escapeHtml(p) + ' by ' + fmtTime(d) + '! 🏆' : d < 0 ? escapeHtml(p) + ' was faster by ' + fmtTime(-d) : 'Tied with ' + escapeHtml(p) + '!';
+      return '<div class="rival-row">' + escapeHtml(p) + ': ' + fmtTime(best[p].t) + ' · <b>' + msg + '</b></div>';
+    }).join('');
+  }
+  function homeLbSub() {
+    if (!lbReady()) return 'Race each other';
+    const { wins, players } = headToHead();
+    if (players.length < 2) return 'Waiting for a rival to join';
+    return players.slice(0, 2).map((p) => (p === save.lb.name ? 'You' : p) + ' ' + (wins[p] || 0)).join(' – ');
+  }
+
   // ---------------------------------------------------------------- misc UI
   function showLoading(on) { $('#loading').hidden = !on; }
   let toastTimer = null;
@@ -1006,6 +1184,9 @@
       case 'backup-copy': return backupCopy();
       case 'backup-restore': return backupRestoreAsk();
       case 'backup-do': return backupRestoreDo();
+      case 'leaderboard': return openLeaderboard();
+      case 'lb-join': return lbJoin();
+      case 'lb-refresh': return lbSync(true).then(renderLeaderboard);
       case 'daily': return openDaily();
       case 'free': return openFreePlay();
       case 'free-start': closeModal(); return startGame(freeSpec());
@@ -1092,6 +1273,8 @@
   if (window.matchMedia) { try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme); } catch (e) { /* old browser */ } }
 
   applyTheme();
+  lbSync().then((ok) => { if (ok) renderHome(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) lbSync().then((ok) => { if (ok && $('#screen-home').classList.contains('active')) renderHome(); }); });
   paintJasperImages();
   findJasperPhoto();
   renderHome();
