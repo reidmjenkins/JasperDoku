@@ -652,8 +652,7 @@ body.holiday .home-date::after { content: "  ❄"; }
 /* ---------- level path ---------- */
 .level-path { position: relative; margin: 8px 0 24px; }
 .lp-trail { position: absolute; left: 0; top: 0; width: 100%; pointer-events: none; overflow: visible; }
-.lp-road { fill: none; stroke: var(--hair); stroke-width: 14; stroke-linecap: round; vector-effect: non-scaling-stroke; }
-.lp-road.done { stroke: rgba(42,157,150,.35); stroke-dasharray: 0.1 22; stroke-width: 9; }
+.lp-road { fill: none; stroke: rgba(255,250,240,.55); stroke-width: 30; stroke-linecap: round; }
 .lp-node, .lp-chest { position: absolute; transform: translate(-50%, -50%); border: 0; cursor: pointer; }
 .lp-node { width: 60px; height: 60px; border-radius: 50%; background: var(--card); color: var(--ink); box-shadow: 0 4px 0 rgba(0,0,0,.10), var(--shadow-1); display: grid; place-items: center; font: inherit; }
 .lp-node b { font-size: 19px; font-weight: 700; }
@@ -687,3 +686,25 @@ body.holiday .home-date::after { content: "  ❄"; }
 @keyframes chestPop { from { transform: scale(.4) rotate(-12deg); } to { transform: none; } }
 @keyframes burst { from { transform: scale(.3); opacity: 1; } to { transform: scale(1.4); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .lp-node.current, .lp-chest.ready svg, .chest-open svg, .chest-burst { animation: none; } }
+
+/* ---------- themed path scenes ---------- */
+.level-path { margin-left: -16px; margin-right: -16px; overflow: hidden; border-radius: 22px; }
+.lp-band { position: absolute; left: 0; right: 0; }
+.lp-band i { position: absolute; font-style: normal; font-size: 30px; opacity: .55; pointer-events: none; filter: saturate(.85); }
+.lp-band-name { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); font-size: 12px; font-weight: 700; letter-spacing: .02em; padding: 5px 12px; border-radius: 999px; background: rgba(255,255,255,.75); color: #4A3A2A; white-space: nowrap; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+.lp-band.z5 { background: repeating-linear-gradient(90deg, #E7C9A2 0 62px, #DDBB90 62px 64px), #E7C9A2; }
+.lp-band.z5::before { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 60%, rgba(255,240,215,.55), rgba(255,240,215,0) 70%); }
+.lp-band.z6 { background: radial-gradient(circle at 20% 30%, #B9E2A0, transparent 40%), radial-gradient(circle at 80% 70%, #A8D98F, transparent 45%), #9FCF86; }
+.lp-band.z7 { background: repeating-conic-gradient(#F4F1EA 0 25%, #DCE8EE 0 50%) 0 0 / 48px 48px; }
+.lp-band.z8 { background: repeating-linear-gradient(0deg, rgba(0,0,0,.05) 0 2px, transparent 2px 22px), linear-gradient(180deg, #7A4E3A, #5E3A2B); }
+.lp-band.z8 .lp-band-name, .lp-band.z10 .lp-band-name { background: rgba(255,255,255,.88); }
+.lp-band.z9 { background: linear-gradient(180deg, #F7A27A, #F5C98F 55%, #FCE3B0); }
+.lp-band.z10 { background: radial-gradient(1.5px 1.5px at 20% 30%, #fff, transparent), radial-gradient(1.5px 1.5px at 70% 60%, #fff, transparent), radial-gradient(1px 1px at 40% 80%, #fff, transparent), radial-gradient(1px 1px at 85% 20%, #fff, transparent), linear-gradient(180deg, #1A2350, #2C3A78); background-size: 120px 120px, 140px 140px, 90px 90px, 110px 110px, auto; }
+.lp-paw { position: absolute; width: 13px; height: 13px; pointer-events: none; opacity: .35;
+  background: radial-gradient(circle at 50% 70%, #5A4632 34%, transparent 36%), radial-gradient(circle at 18% 30%, #5A4632 14%, transparent 16%), radial-gradient(circle at 40% 12%, #5A4632 14%, transparent 16%), radial-gradient(circle at 62% 12%, #5A4632 14%, transparent 16%), radial-gradient(circle at 84% 30%, #5A4632 14%, transparent 16%); }
+.lp-paw.done { opacity: .8; background: radial-gradient(circle at 50% 70%, #23857F 34%, transparent 36%), radial-gradient(circle at 18% 30%, #23857F 14%, transparent 16%), radial-gradient(circle at 40% 12%, #23857F 14%, transparent 16%), radial-gradient(circle at 62% 12%, #23857F 14%, transparent 16%), radial-gradient(circle at 84% 30%, #23857F 14%, transparent 16%); }
+.lp-node, .lp-chest { z-index: 1; }
+.lp-node.locked { opacity: 1; background: rgba(255,255,255,.72); color: rgba(60,50,40,.55); }
+html.dark .lp-node.locked { background: rgba(40,40,44,.78); color: rgba(255,255,255,.5); }
+.lp-band-name { top: 12px; bottom: auto; left: 12px; transform: none; }
+.lp-chest small { background: rgba(255,255,255,.88); color: #8A5A00; padding: 1px 9px; border-radius: 999px; }

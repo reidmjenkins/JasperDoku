@@ -716,7 +716,7 @@
     wt.hidden = !tr;
     if (tr) {
       const chip = (got, was, label) => '<span class="wt-goal' + (got || was ? ' got' : '') + (got && !was ? ' new' : '') + '"><i>' + (got || was ? '✓' : '') + '</i>' + label + '</span>';
-      wt.innerHTML = '<div class="wt-head">' + treatSVG('treat inline-treat') + '<b>' + (tr.gained > 0 ? '+' + tr.gained + ' treat' + (tr.gained === 1 ? '' : 's') : 'No new treats') + '</b><small>' + tr.total + ' earned on this puzzle' + (tr.golden ? ' · golden pays double' : '') + '</small></div>' +
+      wt.innerHTML = '<div class="wt-head">' + treatSVG('treat inline-treat') + '<b>' + (tr.gained > 0 ? '+' + tr.gained + ' new treat' + (tr.gained === 1 ? '' : 's') : 'No new treats') + '</b><small>This puzzle now pays ' + tr.total + ': ' + tr.bestKept + ' kept + ' + tr.bestGoals + ' goal' + (tr.bestGoals === 1 ? '' : 's') + (tr.golden ? ', doubled for golden' : '') + (tr.before ? ' (was ' + tr.before + ')' : '') + '</small></div>' +
         '<div class="wt-goals">' + chip(true, false, tr.lives + ' of ' + tr.maxLives + ' kept') + tr.goals.map((g) => chip(!!(tr.bits & g.bit), !!(tr.prevBits & g.bit), g.label)).join('') + '</div>' +
         (tr.gained === 0 ? '<small class="wt-tip">Replay it faster, with no hints, or without breaking a treat to earn more.</small>' : '');
     }
@@ -878,21 +878,57 @@
     'stock-R': 'Stocking R', 'stock-K': 'Stocking K', 'stock-J': 'Stocking J', 'stock-L': 'Stocking L', 'wall-candy': 'Candy cane wallpaper' };
   const chestReady = (k) => save.level > k * CHEST_EVERY && !save.chests[k];
   const CHEST_SVG = '<svg viewBox="0 0 64 56" aria-hidden="true"><path d="M6 24h52v26a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4Z" fill="#B8742E"/><path d="M6 24h52v8H6z" fill="#8E5420"/><path d="M8 22c0-10 8-18 18-18h12c10 0 18 8 18 18v2H8Z" fill="#D58A3A"/><path d="M28 4h8v50h-8z" fill="#F2C14E"/><path d="M6 22h52v5H6z" fill="#F2C14E"/><rect x="26" y="20" width="12" height="13" rx="2.5" fill="#FFE08A" stroke="#9A6A10" stroke-width="1.5"/><circle cx="32" cy="26.5" r="2" fill="#9A6A10"/></svg>';
+  const ZONES = {
+    5: { name: 'Living Room', props: ['🧶', '🛋️', '🪴', '🐾', '🧸'] },
+    6: { name: 'Back Garden', props: ['🌷', '🦋', '🌼', '🌿', '🐞'] },
+    7: { name: 'Kitchen', props: ['🐟', '🥛', '🧀', '🍳', '🐟'] },
+    8: { name: 'Cozy Library', props: ['📚', '🕯️', '🪶', '📖', '☕'] },
+    9: { name: 'Rooftop Sunset', props: ['🐦', '☁️', '🌇', '🪁', '☁️'] },
+    10: { name: 'Starry Night', props: ['⭐', '🌙', '✨', '🪐', '⭐'] },
+  };
   function renderLevels() {
     const wrap = $('#level-grid');
     wrap.className = 'level-path';
+    showScreen('levels');
+    const PW = wrap.clientWidth || 360;
     const top = Math.max(60, Math.ceil((save.level + 12) / CHEST_EVERY) * CHEST_EVERY);
     const stops = [];
-    for (let n = 1; n <= top; n++) { stops.push({ type: 'level', n }); if (n % CHEST_EVERY === 0) stops.push({ type: 'chest', k: n / CHEST_EVERY }); }
-    const GAP = 86, H = stops.length * GAP + 70;
-    const pos = (i) => ({ x: 50 + Math.sin(i * .72) * 30, y: H - 50 - i * GAP });
-    // the trail between stops
+    for (let n = 1; n <= top; n++) { stops.push({ type: 'level', n }); if (n % CHEST_EVERY === 0) stops.push({ type: 'chest', k: n / CHEST_EVERY, n }); }
+    const GAP = 88, H = stops.length * GAP + 90;
+    const pos = (i) => ({ x: 50 + Math.sin(i * .7) * 28, y: H - 60 - i * GAP });
+    const px = (p) => ({ x: p.x / 100 * PW, y: p.y });
+    let html = '';
+    // a scene behind each run of board sizes
+    let zStart = 0;
+    const sizeAt = (i) => baseSize(stops[i].n);
+    for (let i = 1; i <= stops.length; i++) {
+      if (i < stops.length && sizeAt(i) === sizeAt(zStart)) continue;
+      const size = sizeAt(zStart), z = ZONES[size] || ZONES[10];
+      const yBottom = zStart === 0 ? H : pos(zStart).y + GAP / 2, yTop = i === stops.length ? 0 : pos(i - 1).y - GAP / 2;
+      const top0 = yBottom, hgt = yBottom - yTop;
+      let props = '';
+      for (let k = 0; k < Math.max(2, Math.round(hgt / 120)); k++) {
+        const side = k % 2 ? 'right' : 'left', yy = 30 + ((k * 137) % Math.max(60, hgt - 60)), off = 4 + (k * 7) % 12;
+        props += '<i style="' + side + ':' + off + '%;top:' + yy + 'px;transform:rotate(' + ((k * 23) % 30 - 15) + 'deg)">' + z.props[k % z.props.length] + '</i>';
+      }
+      html += '<div class="lp-band z' + Math.min(size, 10) + '" style="top:' + yTop + 'px;height:' + (top0 - yTop) + 'px">' + props + '<span class="lp-band-name">' + size + ' × ' + size + ' · ' + z.name + '</span></div>';
+      zStart = i;
+    }
+    // the trail: a soft path with paw prints walking along it
     let d = '';
-    stops.forEach((_, i) => { const p = pos(i); if (!i) d = 'M' + p.x + ' ' + p.y; else { const q = pos(i - 1), my = (p.y + q.y) / 2; d += ' C' + q.x + ' ' + my + ' ' + p.x + ' ' + my + ' ' + p.x + ' ' + p.y; } });
+    stops.forEach((_, i) => { const p = px(pos(i)); if (!i) d = 'M' + p.x + ' ' + p.y; else { const q = px(pos(i - 1)), my = (p.y + q.y) / 2; d += ' C' + q.x + ' ' + my + ' ' + p.x + ' ' + my + ' ' + p.x + ' ' + p.y; } });
+    html += '<svg class="lp-trail" viewBox="0 0 ' + PW + ' ' + H + '" style="height:' + H + 'px"><path d="' + d + '" class="lp-road"/></svg>';
     const reachedIdx = stops.findIndex((st) => st.type === 'level' && st.n === save.level);
-    let dDone = ''; for (let i = 0; i <= Math.max(0, reachedIdx); i++) { const p = pos(i); if (!i) dDone = 'M' + p.x + ' ' + p.y; else { const q = pos(i - 1), my = (p.y + q.y) / 2; dDone += ' C' + q.x + ' ' + my + ' ' + p.x + ' ' + my + ' ' + p.x + ' ' + p.y; } }
-    let html = '<svg class="lp-trail" viewBox="0 0 100 ' + H + '" preserveAspectRatio="none" style="height:' + H + 'px"><path d="' + d + '" class="lp-road"/><path d="' + dDone + '" class="lp-road done"/></svg>';
-    let lastSize = 0;
+    const bez = (a, b, c2, d2, t) => { const u = 1 - t; return u * u * u * a + 3 * u * u * t * b + 3 * u * t * t * c2 + t * t * t * d2; };
+    for (let i = 1; i < stops.length; i++) {
+      const q = px(pos(i - 1)), p = px(pos(i)), my = (p.y + q.y) / 2;
+      [.3, .5, .7].forEach((t, k) => {
+        const x = bez(q.x, q.x, p.x, p.x, t), y = bez(q.y, my, my, p.y, t);
+        const x2 = bez(q.x, q.x, p.x, p.x, t + .02), y2 = bez(q.y, my, my, p.y, t + .02);
+        const ang = Math.atan2(y2 - y, x2 - x) * 180 / Math.PI + 90, side = k % 2 ? 5 : -5;
+        html += '<b class="lp-paw' + (i <= reachedIdx ? ' done' : '') + '" style="left:' + (x + side) + 'px;top:' + y + 'px;transform:translate(-50%,-50%) rotate(' + ang + 'deg)"></b>';
+      });
+    }
     stops.forEach((st, i) => {
       const p = pos(i), style = 'left:' + p.x + '%;top:' + p.y + 'px';
       if (st.type === 'chest') {
@@ -900,9 +936,8 @@
         html += '<button class="lp-chest' + (ready ? ' ready' : '') + (opened ? ' opened' : '') + '" style="' + style + '" data-chest="' + st.k + '" aria-label="Chest ' + st.k + (opened ? ', opened' : ready ? ', ready to open' : ', locked until level ' + st.k * CHEST_EVERY) + '">' + CHEST_SVG + '<small>' + (opened ? 'Opened' : ready ? 'Open!' : 'Level ' + st.k * CHEST_EVERY) + '</small></button>';
         return;
       }
-      const n = st.n, rec = save.levels[n] || {}, locked = n > save.level, size = baseSize(n);
-      if (size !== lastSize) { html += '<div class="lp-zone" style="top:' + (p.y + 26) + 'px;' + (p.x > 50 ? 'left:6%' : 'right:6%') + '">' + size + ' × ' + size + '</div>'; lastSize = size; }
-      const b = save.best['level:' + n], tr = b ? puzzleTreats('level:' + n, b) : 0, maxTr = isGolden(n) ? 8 : 6;
+      const n = st.n, rec = save.levels[n] || {}, locked = n > save.level;
+      const b = save.best['level:' + n], tr = b ? puzzleTreats('level:' + n, b) : 0, maxTr = isGolden(n) ? 12 : 6;
       const cls = 'lp-node' + (isGolden(n) ? ' golden' : '') + (n === save.level ? ' current' : '') + (locked ? ' locked' : '') + (rec.done ? ' done' : '') + (rec.skipped && !rec.done ? ' skipped' : '');
       const stars = rec.done ? '<span class="lp-stars">' + [1, 2, 3].map((k) => '<i class="' + (k <= (rec.stars || 1) ? 'on' : '') + '">★</i>').join('') + '</span>' : '';
       const face = n === save.level ? '<span class="lp-face"><img class="jasper-img" alt="" src="' + (isGolden(n) ? 'assets/leo-full.webp' : jasperFullSrc) + '"></span>' : '';
@@ -913,7 +948,6 @@
     wrap.innerHTML = html;
     const recs = Object.values(save.levels);
     $('#levels-sub').textContent = recs.filter((r) => r.done).length + ' solved · ' + treatTotals().levels + ' treats from levels';
-    showScreen('levels');
     const cur = wrap.querySelector('.lp-node.current') || wrap.querySelector('.lp-chest.ready');
     if (cur) setTimeout(() => cur.scrollIntoView({ block: 'center' }), 30);
   }
@@ -1122,7 +1156,7 @@
     const prev = save.best[k] || { t: 0, g: 0 }, next = { t: Math.max(prev.t, G.lives), g: prev.g | bits };
     const before = k in save.best ? puzzleTreats(k, prev) : 0, after = puzzleTreats(k, next);
     save.best[k] = next;
-    return { gained: after - before, total: after, lives: G.lives, maxLives: G.maxLives, bits, prevBits: prev.g, goals, golden: !!spec.golden, first: !(k in save.best) || before === 0 && prev.t === 0 && prev.g === 0 };
+    return { gained: after - before, total: after, before, bestKept: next.t, bestGoals: bitCount(next.g), lives: G.lives, maxLives: G.maxLives, bits, prevBits: prev.g, goals, golden: !!spec.golden };
   }
   function totalStars() { return Object.values(save.levels).reduce((t, r) => t + (r.done ? r.stars || 0 : 0), 0); }
   function checkAchievements(ctx) {
