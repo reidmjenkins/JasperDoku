@@ -578,3 +578,5 @@ html.dark .level-tile.golden small { color: #FFD45C; }
 .win.golden .win-face { box-shadow: 0 0 0 6px #FFC93C, 0 0 70px rgba(255, 201, 60, .95); }
 .ach-cat { display: flex; justify-content: space-between; }
 .ach-cat span:last-child { font-variant-numeric: tabular-nums; }
+.lb-tabs { grid-template-columns: 1fr 1fr; margin: 10px 0 2px; }
+.lb-tabs .choice { font-size: 14px; padding: 8px 0; }

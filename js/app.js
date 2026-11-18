@@ -52,14 +52,35 @@
     stats: { wins: 0, flawless: 0, noHint: 0, free: 0, daily: 0, refillWins: 0, big10: 0 },
     achievements: {},
     lb: { name: '', room: '', rows: [], since: null, pending: [] },
+    first: {},
   });
   let save = load();
+  // carry over first-try treats recorded by the previous version (never from a skip)
+  (function migrateFirst() {
+    for (const [n, r] of Object.entries(save.levels)) {
+      if (r.firstTreats !== undefined && !('level:' + n in save.first) && !(r.skipped && !r.done)) save.first['level:' + n] = r.firstTreats;
+      delete r.firstTreats;
+    }
+    for (const [k, r] of Object.entries(save.daily.done)) {
+      if (r.firstTreats !== undefined && !('daily:' + k in save.first)) save.first['daily:' + k] = r.firstTreats;
+      delete r.firstTreats;
+    }
+  })();
+  const firstKey = (spec) => (spec.mode === 'level' ? 'level:' + spec.id : spec.mode === 'daily' ? 'daily:' + spec.id : null);
+  // has this puzzle's first completion already happened? (older finished levels count as completed)
+  function firstDone(spec) {
+    const k = firstKey(spec);
+    if (!k) return true;
+    if (k in save.first) return true;
+    if (spec.mode === 'level') return !!(save.levels[spec.id] && save.levels[spec.id].done);
+    return !!save.daily.done[spec.id];
+  }
   function load() {
     try {
       const raw = localStorage.getItem(STORE_KEY);
       if (raw) {
         const d = defaults(), s = JSON.parse(raw);
-        return Object.assign(d, s, { settings: Object.assign(d.settings, s.settings || {}), daily: Object.assign(d.daily, s.daily || {}), stats: Object.assign(d.stats, s.stats || {}), achievements: s.achievements || {}, lb: Object.assign(d.lb, s.lb || {}) });
+        return Object.assign(d, s, { settings: Object.assign(d.settings, s.settings || {}), daily: Object.assign(d.daily, s.daily || {}), stats: Object.assign(d.stats, s.stats || {}), achievements: s.achievements || {}, lb: Object.assign(d.lb, s.lb || {}), first: s.first || {} });
       }
     } catch (e) { /* storage unavailable - play without saving */ }
     return defaults();
@@ -119,6 +140,7 @@
     return 0;
   }
   // A daily counts for the leaderboard only on its first, un-skipped attempt.
+  // (forfeit only exists on puzzles skipped under the old rules)
   const dailyCounts = (spec) => spec.mode === 'daily' && !save.daily.done[spec.id] && !save.daily.forfeit[spec.id];
   const DIFFS = { easy: { maxTier: 2, minTier: 0 }, medium: { maxTier: 3, minTier: 2 }, hard: { maxTier: 4, minTier: 3 } };
   function freeSpec() {
@@ -146,12 +168,14 @@
         units: E.buildUnits(N, puzzle.regions),
         state: new Array(N * N).fill(OPEN),
         counts: dailyCounts(spec),
+        // first try at a level: never finished, skipped or scored before
+        firstRun: !firstDone(spec), // treats count on this puzzle's first completion
         history: [], elapsed: 0, hints: 0, wrongPlaced: 0, lives: spec.golden ? 1 : MAX_LIVES, maxLives: spec.golden ? 1 : MAX_LIVES, knownWrong: [], done: false,
       };
       // resume a half-finished board
       const cur = (save.progress || {})[specKey(spec)];
       if (cur && cur.state && cur.state.length === N * N) {
-        G.state = cur.state.slice(); G.elapsed = cur.elapsed || 0; G.hints = cur.hints || 0; G.wrongPlaced = cur.wrongPlaced || 0; G.lives = cur.lives === undefined ? G.maxLives : Math.min(cur.lives, G.maxLives); G.knownWrong = cur.knownWrong || [];
+        G.state = cur.state.slice(); G.elapsed = cur.elapsed || 0; G.hints = cur.hints || 0; G.wrongPlaced = cur.wrongPlaced || 0; G.lives = cur.lives === undefined ? G.maxLives : Math.min(cur.lives, G.maxLives); G.knownWrong = cur.knownWrong || []; G.restarted = !!cur.restarted;
       }
       saveCurrent();
       buildBoard();
@@ -167,7 +191,7 @@
     save.progress = save.progress || {};
     const key = specKey(G.spec);
     delete save.progress[key]; // re-insert so it counts as most recent
-    save.progress[key] = { state: G.state, elapsed: G.elapsed, hints: G.hints, wrongPlaced: G.wrongPlaced, lives: G.lives, knownWrong: G.knownWrong };
+    save.progress[key] = { state: G.state, elapsed: G.elapsed, hints: G.hints, wrongPlaced: G.wrongPlaced, lives: G.lives, knownWrong: G.knownWrong, restarted: !!G.restarted };
     const keys = Object.keys(save.progress);
     while (keys.length > 8) delete save.progress[keys.shift()]; // keep the 8 most recent boards
     persist();
@@ -256,7 +280,8 @@
   function renderHeader() {
     const s = G.spec;
     $('#game-title').textContent = s.mode === 'level' ? (s.golden ? '✨ Golden Level ' + s.id : 'Level ' + s.id) : s.mode === 'daily' ? 'Daily #' + s.n + (s.day === todayStr() ? '' : ' · ' + shortDate(s.day)) : 'Free Play';
-    const diffWord = s.golden ? ' · One golden treat' : s.mode === 'free' ? ' · ' + cap(save.settings.freeDiff) : s.mode === 'daily' ? (G.counts ? ' · Counts for leaderboard' : ' · Practice') : '';
+    const firstNote = G && (s.mode === 'level' || s.mode === 'daily') ? (G.firstRun ? ' · Treats count' : ' · Practice') : '';
+    const diffWord = s.golden ? ' · One golden treat' + firstNote : s.mode === 'level' ? firstNote : s.mode === 'free' ? ' · ' + cap(save.settings.freeDiff) : s.mode === 'daily' ? (G.counts ? ' · Counts for leaderboard' : ' · Practice') : '';
     $('#game-sub').textContent = G.N + ' × ' + G.N + diffWord;
     $('#timer').classList.toggle('hidden-timer', !save.settings.timer);
     renderTimer();
@@ -301,12 +326,24 @@
     saveCurrent();
     checkWin();
   }
+  const isLocked = (i) => G && G.state[i] === JASPER && isSolution(i);
+  function lockedNudge(i) {
+    const el = boardEl.children[i];
+    if (el) { el.classList.remove('nudge'); void el.offsetWidth; el.classList.add('nudge'); }
+    toast('🔒 ' + pieceName() + ' is locked in. Correct spots stay put.');
+  }
   function undo() {
     if (!G || G.done) return;
     if (G.lives <= 0) return outOfTreats();
     const step = G.history.pop();
     if (!step) return toast('Nothing to undo');
-    for (let k = step.length - 1; k >= 0; k--) G.state[step[k].i] = step[k].from;
+    let kept = -1, changed = false;
+    for (let k = step.length - 1; k >= 0; k--) {
+      const c = step[k];
+      if (c.to === JASPER && isSolution(c.i)) { kept = c.i; continue; } // never undo a correct Jasper/Leo
+      G.state[c.i] = c.from; changed = true;
+    }
+    if (!changed && kept >= 0) return lockedNudge(kept);
     afterChange(null);
   }
   /*
@@ -328,6 +365,7 @@
       return;
     }
     const s = G.state[i];
+    if (isLocked(i)) { lastTap = null; return lockedNudge(i); }
     const autoShown = s === OPEN && save.settings.autoX && boardEl.children[i].classList.contains('auto');
     const to = s === JASPER ? OPEN : s === OUT ? OPEN : autoShown ? OPEN : OUT;
     lastTap = { i, t: now, from: s, changed: to !== s };
@@ -586,6 +624,7 @@
         save.daily.done[spec.id].time = G.elapsed;
       }
     }
+    { const fk = firstKey(spec); if (fk && G.firstRun && !(fk in save.first)) save.first[fk] = G.lives; }
     const st = save.stats;
     st.wins++;
     if (G.hints === 0 && G.wrongPlaced === 0) st.flawless++;
@@ -651,34 +690,55 @@
   function skip() {
     const s = G.spec;
     const msg = s.mode === 'level'
-      ? 'Skip Level ' + s.id + '? You can come back to it any time from All Levels.'
-      : s.mode === 'daily' ? (G.counts ? 'Skip Daily #' + s.n + '? If you skip, it won\'t count on the leaderboard when you come back to it.' : 'Leave Daily #' + s.n + '?') : 'Get a brand new puzzle?';
+      ? 'Skip Level ' + s.id + '? Your board and treats are saved, so you can come back to it any time from All Levels.'
+      : s.mode === 'daily' ? 'Skip Daily #' + s.n + ' for now? Your board, treats and time are saved for when you come back.' : 'Get a brand new puzzle?';
     openModal('<h2>Skip?</h2><p>' + msg + '</p>' + actions([['Skip it', 'confirm-skip', 'primary'], ['Keep playing', 'close-modal', 'ghost']]));
   }
   function confirmSkip() {
     closeModal();
     const s = G.spec;
-    forgetProgress();
+    if (s.mode === 'free') { forgetProgress(); persist(); return startGame(freeSpec()); }
+    saveCurrent(); // the board and treats wait for you; skipping doesn't use up the first try
     if (s.mode === 'level') {
       if (!save.levels[s.id]) save.levels[s.id] = { skipped: true };
       save.level = Math.max(save.level, s.id + 1);
       setTimeout(() => lbSync(), 600);
       persist();
       startGame(levelSpec(s.id + 1));
-    } else if (s.mode === 'daily') {
-      if (!save.daily.done[s.id]) save.daily.forfeit[s.id] = true;
-      persist(); openDaily(s.day);
     } else {
-      persist(); startGame(freeSpec());
+      persist(); openDaily(s.day);
     }
+  }
+  // Clear button: wipe ✕ marks for free, or start the whole puzzle over
+  function clearMenu() {
+    if (!G || G.done) return;
+    if (G.lives <= 0) return outOfTreats();
+    openModal('<h2>Clear or start over?</h2><p>Clearing removes your ✕ marks and keeps placed ' + pieceName() + 's. Starting over resets the whole board and your treats.</p>' +
+      actions([['Clear ✕ marks', 'clear-marks', 'primary'], ['Start over', 'start-over', 'danger'], ['Cancel', 'close-modal', 'ghost']]));
+  }
+  function puzzleTitle() { const s = G.spec; return s.mode === 'level' ? (s.golden ? 'Golden Level ' : 'Level ') + s.id : s.mode === 'daily' ? 'Daily #' + s.n : 'this puzzle'; }
+  function askStartOver() {
+    if (!G || G.done) return;
+    const k = firstKey(G.spec);
+    if (!k || !G.firstRun || k in save.first) return doStartOver(); // practice: no penalty, no question
+    openModal('<h2>Are you sure?</h2><p>Starting over counts as finishing <b>' + puzzleTitle() + '</b> with <b>0 treats</b> on the leaderboard. Treats only count on a puzzle\'s first completion.</p>' +
+      actions([['Start over · 0 🍪', 'start-over-yes', 'danger'], ['Cancel', 'start-over-no', 'ghost']]));
+  }
+  function doStartOver(recordZero) {
+    closeModal();
+    const k = firstKey(G.spec);
+    if (recordZero && k && !(k in save.first)) { save.first[k] = 0; G.firstRun = false; persist(); setTimeout(() => lbSync(), 400); }
+    G.restarted = true; G.lives = G.maxLives; G.wrongPlaced = 0; G.knownWrong = []; G.history = []; G.state.fill(OPEN);
+    if (G.spec.mode !== 'daily') { G.elapsed = 0; renderTimer(); } // dailies keep their clock so restarts can't help the time race
+    clearHint(); renderCells(); renderLives(); renderHeader(); saveCurrent();
   }
   function restart() {
     if (!G || G.done) return;
     const changes = [];
-    G.state.forEach((v, i) => { if (v !== OPEN) changes.push({ i, to: OPEN }); });
-    if (!changes.length) return;
+    G.state.forEach((v, i) => { if (v !== OPEN && !isLocked(i)) changes.push({ i, to: OPEN }); });
+    if (!changes.length) return toast('Nothing to clear. Placed ' + pieceName() + 's stay locked.');
     setCells(changes);
-    toast('Board cleared - tap Undo to bring it back');
+    toast('✕ marks cleared. ' + pieceName() + 's stay locked (Undo brings the marks back)');
   }
 
   // ---------------------------------------------------------------- screens
@@ -759,7 +819,7 @@
       '<div class="howto-step"><div class="num">1</div><p>Put <b>one Jasper</b> in every <b>color patch</b>.</p></div>' +
       '<div class="howto-step"><div class="num">2</div><p>Put <b>one Jasper</b> in every <b>row</b> and every <b>column</b>.</p></div>' +
       '<div class="howto-step"><div class="num">3</div><p>Jaspers <b>never touch</b> each other, not even corner to corner.</p></div>' +
-      '<p><b>Tap</b> a square once to cross it out ✕ (tap again to clear it). <b>Double-tap</b> to place Jasper. Tap Jasper once to take them off. <b>Drag</b> your finger to cross out lots of squares at once.</p>' +
+      '<p><b>Tap</b> a square once to cross it out ✕ (tap again to clear it). <b>Double-tap</b> to place Jasper. Once Jasper is placed in a correct spot, they are <b>locked</b> so they cannot be removed by accident. <b>Drag</b> your finger to cross out lots of squares at once.</p>' +
       '<p>You have <b>3 treats</b>. Put Jasper on a wrong square and a treat breaks. Run out? Start the puzzle over.</p>' +
       '<p>Every 7 to 15 levels there\'s a <b>golden treat level</b> starring <b>Leo</b>: an 8 × 8 board with just <b>one</b> treat.</p>' +
       '<p>Stuck? Hints are free and unlimited. They explain <i>why</i>, and can do the move for you.</p>' +
@@ -793,7 +853,7 @@
 
       '<div class="group-label">Leaderboard</div>' +
       '<div class="group">' +
-      '<label class="set-row input-row"><span class="label">Your name</span><input id="lb-name" maxlength="24" placeholder="e.g. Reid" value="' + escapeHtml(save.lb.name) + '" autocomplete="off"></label>' +
+      '<label class="set-row input-row"><span class="label">Your name</span><input id="lb-name" maxlength="24" placeholder="Your name" value="' + escapeHtml(save.lb.name) + '" autocomplete="off"></label>' +
       '<label class="set-row input-row"><span class="label">Family code</span><input id="lb-room" maxlength="40" placeholder="jasper-…" value="' + escapeHtml(save.lb.room) + '" autocomplete="off" autocapitalize="off" spellcheck="false"></label>' +
       '<button class="set-row link-row" data-action="lb-join"><span class="label">' + (lbReady() ? 'Save & Sync' : 'Join Leaderboard') + '</span><span class="lb-status" id="lb-status">' + lbStatusText() + '</span></button>' +
       '</div>' +
@@ -899,6 +959,16 @@
   function checkAchievementsQuietly() {
     const fresh = checkAchievements();
     if (fresh.length) { persist(); toast('🏆 Achievement unlocked: ' + fresh.map((a) => a.name).join(', ')); if ($('#screen-home').classList.contains('active')) renderHome(); }
+  }
+  // Treats saved on first tries. Levels finished before this feature: estimated from stars.
+  function treatTotals() {
+    let levels = 0, dailies = 0;
+    for (const [k, v] of Object.entries(save.first)) { if (k.startsWith('level:')) levels += v; else if (k.startsWith('daily:')) dailies += v; }
+    // levels finished before treats were tracked: estimate from stars
+    for (const [n, r] of Object.entries(save.levels)) {
+      if (r.done && !('level:' + n in save.first)) levels += isGolden(+n) ? (r.stars === 3 ? 1 : 0) : Math.min(3, r.stars || 0);
+    }
+    return { levels, dailies, total: levels + dailies };
   }
   function totalStars() { return Object.values(save.levels).reduce((t, r) => t + (r.done ? r.stars || 0 : 0), 0); }
   function checkAchievements(ctx) {
@@ -1147,11 +1217,18 @@
           save.lb.pending.push({ puzzle: 'progress:level', time: save.level, mistakes: Math.min(999, solvedN), hints: Math.min(999, totalStars()), progKey });
           persist();
         }
+        const tt = treatTotals(), treatKey = tt.levels + '/' + tt.dailies;
+        if (save.lb.sentTreats !== treatKey) {
+          save.lb.pending = save.lb.pending.filter((p) => p.puzzle !== 'progress:treats');
+          save.lb.pending.push({ puzzle: 'progress:treats', time: Math.min(86400, tt.total + 1), mistakes: Math.min(999, tt.levels), hints: Math.min(999, tt.dailies), treatKey });
+          persist();
+        }
         // send anything waiting (works later if the phone was offline)
         while (save.lb.pending.length) {
           const p = save.lb.pending[0];
           await rpc('submit_score', { p_room: save.lb.room, p_player: save.lb.name, p_puzzle: p.puzzle, p_time: p.time, p_mistakes: p.mistakes, p_hints: p.hints });
           if (p.progKey) save.lb.sentProgress = p.progKey;
+          if (p.treatKey) save.lb.sentTreats = p.treatKey;
           save.lb.pending.shift(); persist();
         }
         const rows = await rpc('get_scores', { p_room: save.lb.room, p_since: save.lb.since || '1970-01-01T00:00:00Z' });
@@ -1197,7 +1274,7 @@
     return best;
   }
   function lbPlayers() {
-    const set = new Set(save.lb.rows.filter((r) => /^(daily:|progress:level$)/.test(r[1])).map((r) => r[0]));
+    const set = new Set(save.lb.rows.filter((r) => /^(daily:|progress:(level|treats)$)/.test(r[1])).map((r) => r[0]));
     if (save.lb.name) set.add(save.lb.name);
     const me = save.lb.name;
     return [...set].sort((a, b) => (a === me ? -1 : b === me ? 1 : a.localeCompare(b)));
@@ -1211,6 +1288,15 @@
     }
     // show this phone's own progress immediately, even before it syncs
     if (save.lb.name) out[save.lb.name] = { level: save.level, solved: Object.values(save.levels).filter((r) => r.done).length, stars: totalStars(), at: new Date().toISOString() };
+    return out;
+  }
+  function lbTreats() {
+    const out = {};
+    for (const [player, puzzle, t, lv, dy, at] of save.lb.rows) {
+      if (puzzle !== 'progress:treats') continue;
+      if (!out[player] || at > out[player].at) out[player] = { total: t - 1, levels: lv, dailies: dy, at };
+    }
+    if (save.lb.name) { const m = treatTotals(); out[save.lb.name] = { total: m.total, levels: m.levels, dailies: m.dailies, at: new Date().toISOString() }; }
     return out;
   }
   // who won each puzzle / day
@@ -1264,55 +1350,62 @@
     const { wins, dayWins, shared, players, best } = headToHead();
     const me = save.lb.name;
     const two = players.slice(0, 2);
-    // overall scoreboard
-    let html = '<div class="lb-score">' + two.map((p, k) =>
-      '<div class="lb-player">' + avatar(p, k) + '<b>' + escapeHtml(p) + (p === me ? ' <small>(you)</small>' : '') + '</b><strong>' + (wins[p] || 0) + '</strong><small>puzzles won · ' + (dayWins[p] || 0) + ' days</small></div>').join('<div class="lb-vs">vs</div>') +
+    const tab = save.lb.tab === 'levels' ? 'levels' : 'daily';
+    const tr = lbTreats(), lv = lbLevels();
+    const crownOf = (vals) => { const ps = two.filter((p) => vals[p] !== undefined); if (ps.length < 2 || vals[ps[0]] === vals[ps[1]]) return null; return vals[ps[0]] > vals[ps[1]] ? ps[0] : ps[1]; };
+    const scoreCard = (val, sub, crown) => '<div class="lb-score">' + two.map((p, k) =>
+      '<div class="lb-player">' + avatar(p, k) + '<b>' + (crown === p ? '👑 ' : '') + escapeHtml(p) + (p === me ? ' <small>(you)</small>' : '') + '</b><strong>' + val(p) + '</strong><small>' + sub(p) + '</small></div>').join('<div class="lb-vs">vs</div>') +
       (players.length < 2 ? '<div class="lb-vs">vs</div><div class="lb-player waiting">' + avatar('?', 1) + '<b>Waiting…</b><small>Join with the same family code</small></div>' : '') + '</div>';
-    html += '<div class="group-foot center">' + shared + ' daily puzzle' + (shared === 1 ? '' : 's') + ' raced · first try only · hints add ' + HINT_PENALTY + 's</div>';
-    // level progress
-    const lv = lbLevels();
-    const lvPlayers = two.filter((p) => lv[p]);
-    if (lvPlayers.length) {
-      const top = lvPlayers.length > 1 ? lvPlayers.reduce((a, b) => (lv[a].level >= lv[b].level ? a : b)) : null;
-      const tied = lvPlayers.length > 1 && lv[lvPlayers[0]].level === lv[lvPlayers[1]].level;
-      html += '<div class="group-label">Levels</div><div class="group">' + two.map((p, k) => {
-        const r = lv[p];
-        if (!r) return '<div class="set-row">' + avatar(p, k) + '<span class="label">' + escapeHtml(p) + '<small>No levels shared yet</small></span></div>';
-        const size = levelConfig(r.level).size;
-        return '<div class="set-row">' + avatar(p, k) + '<span class="label">' + escapeHtml(p) + (p === me ? ' <small class="inline">(you)</small>' : '') +
-          '<small>' + r.solved + ' solved · ' + r.stars + ' ★ · ' + size + '×' + size + ' boards</small></span>' +
-          '<span class="lb-level">' + (top === p && !tied ? '👑 ' : '') + 'Level ' + r.level + '</span></div>';
-      }).join('') + '</div>';
+    const chipRow = (label, vals, fmt) => {
+      const c = crownOf(vals);
+      return '<div class="lb-row"><span class="label">' + label + '</span><div class="lb-times">' + two.map((p, k) =>
+        '<span class="lb-chip' + (c === p ? ' fastest' : '') + (vals[p] === undefined ? ' none' : '') + '">' + avatar(p, k) + (vals[p] === undefined ? '–' : fmt(vals[p])) + '</span>').join('') + '</div></div>';
+    };
+    const pick = (obj, f) => Object.fromEntries(two.filter((p) => obj[p]).map((p) => [p, f(obj[p])]));
+    let html = '<div class="choice-grid lb-tabs"><button class="choice' + (tab === 'daily' ? ' on' : '') + '" data-lb-tab="daily">Daily</button><button class="choice' + (tab === 'levels' ? ' on' : '') + '" data-lb-tab="levels">Levels</button></div>';
+    if (tab === 'daily') {
+      const winVals = Object.fromEntries(two.map((p) => [p, wins[p] || 0]));
+      html += scoreCard((p) => wins[p] || 0, (p) => 'puzzles won · ' + (dayWins[p] || 0) + ' days', crownOf(winVals));
+      html += '<div class="group-foot center">' + shared + ' daily puzzle' + (shared === 1 ? '' : 's') + ' raced · first completion only · hints add ' + HINT_PENALTY + 's</div>';
+      html += '<div class="group">' + chipRow('Days won', Object.fromEntries(two.map((p) => [p, dayWins[p] || 0])), (v) => v) +
+        chipRow('Treats saved', pick(tr, (r) => r.dailies), (v) => v + ' 🍪') + '</div>';
+      // one day, puzzle by puzzle
+      const dr = dayResult(lbDay, best);
+      const dayTitle = lbDay === todayStr() ? 'Today' : shortDate(lbDay);
+      const score = two.length === 2 ? ' · ' + two.map((p) => escapeHtml(p === me ? 'You' : p) + ' ' + (dr.wins[p] || 0)).join(' – ') : '';
+      html += '<div class="group-label lb-day-head"><button class="icon-btn small" data-action="lb-day-prev" aria-label="Previous day"><svg viewBox="0 0 24 24"><path d="M15 5 8 12l7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button><span>' + dayTitle + score + '</span><button class="icon-btn small" data-action="lb-day-next" aria-label="Next day"' + (lbDay >= todayStr() ? ' disabled' : '') + '><svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>';
+      html += '<div class="group">';
+      for (let n = 1; n <= DAILY_COUNT; n++) {
+        const entry = best['daily:' + dailyKey(lbDay, n)] || {};
+        const w = lbWinner(entry);
+        html += '<div class="lb-row"><span class="label">#' + n + ' <small>' + DAILY_LADDER[n - 1].size + '×' + DAILY_LADDER[n - 1].size + '</small></span><div class="lb-times">' + two.map((p, k) => {
+          const r = entry[p];
+          const t = r ? fmtTime(r.t) + (r.hints ? '<i class="lb-hint">💡' + r.hints + '</i>' : '') : '–';
+          return '<span class="lb-chip' + (r && w === p ? ' fastest' : '') + (r ? '' : ' none') + '">' + avatar(p, k) + t + '</span>';
+        }).join('') + '</div></div>';
+      }
+      html += '</div>';
+      const days = [...new Set(Object.keys(best).map((k) => k.slice(6, 16)))].sort().reverse().slice(0, 14);
+      if (days.length) {
+        html += '<div class="group-label">Recent Days</div><div class="group">' + days.map((d) => {
+          const r = dayResult(d, best);
+          const ps = two.map((p) => r.wins[p] || 0);
+          const lead = ps.length === 2 && ps[0] !== ps[1];
+          return '<button class="lb-row lb-day-row" data-lb-day="' + d + '"><span class="label">' + (d === todayStr() ? 'Today' : shortDate(d)) + ' <small>' + r.shared + ' raced</small></span><span class="lb-day-score">' +
+            two.map((p, k) => avatar(p, k) + '<b>' + (r.wins[p] || 0) + '</b>').join('<i>–</i>') + (lead ? ' 👑' : '') + '</span></button>';
+        }).join('') + '</div>';
+      }
+    } else {
+      const lvVals = pick(lv, (r) => r.level);
+      html += scoreCard((p) => (lv[p] ? lv[p].level : '–'), (p) => (lv[p] ? 'current level · ' + baseSize(lv[p].level) + '×' + baseSize(lv[p].level) : 'not shared yet'), crownOf(lvVals));
+      html += '<div class="group">' +
+        chipRow('Treats saved', pick(tr, (r) => r.levels), (v) => v + ' 🍪') +
+        chipRow('Levels solved', pick(lv, (r) => r.solved), (v) => v) +
+        chipRow('Stars', pick(lv, (r) => r.stars), (v) => v + ' ★') + '</div>';
     }
-    // one day, puzzle by puzzle
-    const dr = dayResult(lbDay, best);
-    const dayTitle = lbDay === todayStr() ? 'Today' : shortDate(lbDay);
-    const score = two.length === 2 ? ' · ' + two.map((p) => escapeHtml(p === me ? 'You' : p) + ' ' + (dr.wins[p] || 0)).join(' – ') : '';
-    html += '<div class="group-label lb-day-head"><button class="icon-btn small" data-action="lb-day-prev" aria-label="Previous day"><svg viewBox="0 0 24 24"><path d="M15 5 8 12l7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button><span>' + dayTitle + score + '</span><button class="icon-btn small" data-action="lb-day-next" aria-label="Next day"' + (lbDay >= todayStr() ? ' disabled' : '') + '><svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>';
-    html += '<div class="group">';
-    for (let n = 1; n <= DAILY_COUNT; n++) {
-      const entry = best['daily:' + dailyKey(lbDay, n)] || {};
-      const w = lbWinner(entry);
-      html += '<div class="lb-row"><span class="label">#' + n + ' <small>' + DAILY_LADDER[n - 1].size + '×' + DAILY_LADDER[n - 1].size + '</small></span><div class="lb-times">' + two.map((p, k) => {
-        const r = entry[p];
-        const t = r ? fmtTime(r.t) + (r.hints ? '<i class="lb-hint">💡' + r.hints + '</i>' : '') : '–';
-        return '<span class="lb-chip' + (r && w === p ? ' fastest' : '') + (r ? '' : ' none') + '">' + avatar(p, k) + t + '</span>';
-      }).join('') + '</div></div>';
-    }
-    html += '</div>';
-    // recent days
-    const days = [...new Set(Object.keys(best).map((k) => k.slice(6, 16)))].sort().reverse().slice(0, 14);
-    if (days.length) {
-      html += '<div class="group-label">Recent Days</div><div class="group">' + days.map((d) => {
-        const r = dayResult(d, best);
-        const ps = two.map((p) => r.wins[p] || 0);
-        const lead = ps.length === 2 && ps[0] !== ps[1] ? two[ps[0] > ps[1] ? 0 : 1] : null;
-        return '<button class="lb-row lb-day-row" data-lb-day="' + d + '"><span class="label">' + (d === todayStr() ? 'Today' : shortDate(d)) + ' <small>' + r.shared + ' raced</small></span><span class="lb-day-score">' +
-          two.map((p, k) => avatar(p, k) + '<b>' + (r.wins[p] || 0) + '</b>').join('<i>–</i>') + (lead ? ' 👑' : '') + '</span></button>';
-      }).join('') + '</div>';
-    }
+    html += '<div class="group-foot">Treats are counted on each puzzle\'s first completion: finishing it, or starting it over (which counts as 0). Skipping or leaving doesn\'t use it up, and replays never add more.</div>';
     html += '<button class="btn ghost lb-refresh" data-action="lb-refresh">Refresh</button>';
-    html += '<div class="group-foot center">' + lbStatusText() + (save.lb.pending.length ? ' · ' + save.lb.pending.length + ' time(s) waiting to send' : '') + '</div>';
+    html += '<div class="group-foot center">' + lbStatusText() + (save.lb.pending.length ? ' · ' + save.lb.pending.length + ' update(s) waiting to send' : '') + '</div>';
     body.innerHTML = html;
   }
   async function lbWinCompare(key, myScore, counted) {
@@ -1360,6 +1453,8 @@
   document.addEventListener('click', (e) => {
     const cd = e.target.closest('[data-day]');
     if (cd && !cd.disabled) { dailyDay = cd.dataset.day; return renderDaily(); }
+    const lt = e.target.closest('[data-lb-tab]');
+    if (lt) { save.lb.tab = lt.dataset.lbTab; persist(); return renderLeaderboard(); }
     const ld = e.target.closest('[data-lb-day]');
     if (ld) { lbDay = ld.dataset.lbDay; renderLeaderboard(); return window.scrollTo(0, 0); }
     const dn = e.target.closest('[data-daily-n]');
@@ -1414,12 +1509,13 @@
       case 'hint': return showHint();
       case 'hint-close': return clearHint();
       case 'hint-apply': return applyHint();
-      case 'restart': return restart();
+      case 'restart': return clearMenu();
       case 'skip': return skip();
       case 'confirm-skip': return confirmSkip();
-      case 'start-over': closeModal(); G.restarted = true; G.lives = G.maxLives; G.wrongPlaced = 0; G.knownWrong = []; G.history = []; G.state.fill(OPEN);
-        if (G.spec.mode !== 'daily') { G.elapsed = 0; renderTimer(); } // dailies keep their clock so restarts can't help on the leaderboard
-        clearHint(); renderCells(); renderLives(); saveCurrent(); return;
+      case 'start-over': return askStartOver();
+      case 'start-over-yes': return doStartOver(true);
+      case 'start-over-no': closeModal(); if (G && G.lives <= 0) outOfTreats(); return;
+      case 'clear-marks': closeModal(); return restart();
       case 'close-modal': return closeModal();
       case 'win-next': return winNext();
       case 'reset-ask':
