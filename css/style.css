@@ -708,3 +708,5 @@ body.holiday .home-date::after { content: "  ❄"; }
 html.dark .lp-node.locked { background: rgba(40,40,44,.78); color: rgba(255,255,255,.5); }
 .lp-band-name { top: 12px; bottom: auto; left: 12px; transform: none; }
 .lp-chest small { background: rgba(255,255,255,.88); color: #8A5A00; padding: 1px 9px; border-radius: 999px; }
+.wt-head.only { display: flex; gap: 6px; }
+.wt-head.only svg.treat.inline-treat { grid-row: auto; }

@@ -716,9 +716,7 @@
     wt.hidden = !tr;
     if (tr) {
       const chip = (got, was, label) => '<span class="wt-goal' + (got || was ? ' got' : '') + (got && !was ? ' new' : '') + '"><i>' + (got || was ? '✓' : '') + '</i>' + label + '</span>';
-      wt.innerHTML = '<div class="wt-head">' + treatSVG('treat inline-treat') + '<b>' + (tr.gained > 0 ? '+' + tr.gained + ' new treat' + (tr.gained === 1 ? '' : 's') : 'No new treats') + '</b><small>This puzzle now pays ' + tr.total + ': ' + tr.bestKept + ' kept + ' + tr.bestGoals + ' goal' + (tr.bestGoals === 1 ? '' : 's') + (tr.golden ? ', doubled for golden' : '') + (tr.before ? ' (was ' + tr.before + ')' : '') + '</small></div>' +
-        '<div class="wt-goals">' + chip(true, false, tr.lives + ' of ' + tr.maxLives + ' kept') + tr.goals.map((g) => chip(!!(tr.bits & g.bit), !!(tr.prevBits & g.bit), g.label)).join('') + '</div>' +
-        (tr.gained === 0 ? '<small class="wt-tip">Replay it faster, with no hints, or without breaking a treat to earn more.</small>' : '');
+      wt.innerHTML = '<div class="wt-head only">' + treatSVG('treat inline-treat') + '<b>' + (tr.gained > 0 ? '+' + tr.gained + ' treat' + (tr.gained === 1 ? '' : 's') : 'No new treats') + '</b></div>';
     }
     const ub = $('#win-badges');
     $('#win-rival').innerHTML = '';
