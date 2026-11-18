@@ -146,12 +146,14 @@
         units: E.buildUnits(N, puzzle.regions),
         state: new Array(N * N).fill(OPEN),
         counts: dailyCounts(spec),
+        // first try at a level: never finished, skipped or scored before
+        firstRun: spec.mode === 'level' ? !(save.levels[spec.id] && (save.levels[spec.id].done || save.levels[spec.id].skipped || save.levels[spec.id].firstTreats !== undefined)) : spec.mode === 'daily' ? dailyCounts(spec) : false,
         history: [], elapsed: 0, hints: 0, wrongPlaced: 0, lives: spec.golden ? 1 : MAX_LIVES, maxLives: spec.golden ? 1 : MAX_LIVES, knownWrong: [], done: false,
       };
       // resume a half-finished board
       const cur = (save.progress || {})[specKey(spec)];
       if (cur && cur.state && cur.state.length === N * N) {
-        G.state = cur.state.slice(); G.elapsed = cur.elapsed || 0; G.hints = cur.hints || 0; G.wrongPlaced = cur.wrongPlaced || 0; G.lives = cur.lives === undefined ? G.maxLives : Math.min(cur.lives, G.maxLives); G.knownWrong = cur.knownWrong || [];
+        G.state = cur.state.slice(); G.elapsed = cur.elapsed || 0; G.hints = cur.hints || 0; G.wrongPlaced = cur.wrongPlaced || 0; G.lives = cur.lives === undefined ? G.maxLives : Math.min(cur.lives, G.maxLives); G.knownWrong = cur.knownWrong || []; G.restarted = !!cur.restarted;
       }
       saveCurrent();
       buildBoard();
@@ -167,7 +169,7 @@
     save.progress = save.progress || {};
     const key = specKey(G.spec);
     delete save.progress[key]; // re-insert so it counts as most recent
-    save.progress[key] = { state: G.state, elapsed: G.elapsed, hints: G.hints, wrongPlaced: G.wrongPlaced, lives: G.lives, knownWrong: G.knownWrong };
+    save.progress[key] = { state: G.state, elapsed: G.elapsed, hints: G.hints, wrongPlaced: G.wrongPlaced, lives: G.lives, knownWrong: G.knownWrong, restarted: !!G.restarted };
     const keys = Object.keys(save.progress);
     while (keys.length > 8) delete save.progress[keys.shift()]; // keep the 8 most recent boards
     persist();
@@ -583,6 +585,7 @@
         done: true,
         stars: Math.max(stars, prev.stars || 0),
         best: prev.best ? Math.min(prev.best, G.elapsed) : G.elapsed,
+        firstTreats: prev.firstTreats !== undefined ? prev.firstTreats : G.firstRun ? (G.restarted ? 0 : G.lives) : prev.done ? undefined : 0, // replays never change it; older levels keep their star estimate
       };
       save.level = Math.max(save.level, spec.id + 1);
       setTimeout(() => lbSync(), 600);
@@ -594,7 +597,7 @@
           save.daily.last = spec.day;
           save.daily.best = Math.max(save.daily.best || 0, save.daily.streak);
         }
-        save.daily.done[spec.id] = { time: G.elapsed, stars, hints: G.hints };
+        save.daily.done[spec.id] = { time: G.elapsed, stars, hints: G.hints, firstTreats: G.counts ? (G.restarted ? 0 : G.lives) : 0 };
       } else if (G.elapsed < save.daily.done[spec.id].time) {
         save.daily.done[spec.id].time = G.elapsed;
       }
@@ -673,7 +676,7 @@
     const s = G.spec;
     forgetProgress();
     if (s.mode === 'level') {
-      if (!save.levels[s.id]) save.levels[s.id] = { skipped: true };
+      if (!save.levels[s.id]) save.levels[s.id] = { skipped: true, firstTreats: 0 };
       save.level = Math.max(save.level, s.id + 1);
       setTimeout(() => lbSync(), 600);
       persist();
@@ -912,6 +915,16 @@
   function checkAchievementsQuietly() {
     const fresh = checkAchievements();
     if (fresh.length) { persist(); toast('🏆 Achievement unlocked: ' + fresh.map((a) => a.name).join(', ')); if ($('#screen-home').classList.contains('active')) renderHome(); }
+  }
+  // Treats saved on first tries. Levels finished before this feature: estimated from stars.
+  function treatTotals() {
+    let levels = 0, dailies = 0;
+    for (const [n, r] of Object.entries(save.levels)) {
+      if (r.firstTreats !== undefined) levels += r.firstTreats;
+      else if (r.done) levels += isGolden(+n) ? (r.stars === 3 ? 1 : 0) : Math.min(3, r.stars || 0);
+    }
+    for (const r of Object.values(save.daily.done)) dailies += r.firstTreats || 0;
+    return { levels, dailies, total: levels + dailies };
   }
   function totalStars() { return Object.values(save.levels).reduce((t, r) => t + (r.done ? r.stars || 0 : 0), 0); }
   function checkAchievements(ctx) {
@@ -1160,11 +1173,18 @@
           save.lb.pending.push({ puzzle: 'progress:level', time: save.level, mistakes: Math.min(999, solvedN), hints: Math.min(999, totalStars()), progKey });
           persist();
         }
+        const tt = treatTotals(), treatKey = tt.levels + '/' + tt.dailies;
+        if (save.lb.sentTreats !== treatKey) {
+          save.lb.pending = save.lb.pending.filter((p) => p.puzzle !== 'progress:treats');
+          save.lb.pending.push({ puzzle: 'progress:treats', time: Math.min(86400, tt.total + 1), mistakes: Math.min(999, tt.levels), hints: Math.min(999, tt.dailies), treatKey });
+          persist();
+        }
         // send anything waiting (works later if the phone was offline)
         while (save.lb.pending.length) {
           const p = save.lb.pending[0];
           await rpc('submit_score', { p_room: save.lb.room, p_player: save.lb.name, p_puzzle: p.puzzle, p_time: p.time, p_mistakes: p.mistakes, p_hints: p.hints });
           if (p.progKey) save.lb.sentProgress = p.progKey;
+          if (p.treatKey) save.lb.sentTreats = p.treatKey;
           save.lb.pending.shift(); persist();
         }
         const rows = await rpc('get_scores', { p_room: save.lb.room, p_since: save.lb.since || '1970-01-01T00:00:00Z' });
@@ -1210,7 +1230,7 @@
     return best;
   }
   function lbPlayers() {
-    const set = new Set(save.lb.rows.filter((r) => /^(daily:|progress:level$)/.test(r[1])).map((r) => r[0]));
+    const set = new Set(save.lb.rows.filter((r) => /^(daily:|progress:(level|treats)$)/.test(r[1])).map((r) => r[0]));
     if (save.lb.name) set.add(save.lb.name);
     const me = save.lb.name;
     return [...set].sort((a, b) => (a === me ? -1 : b === me ? 1 : a.localeCompare(b)));
@@ -1224,6 +1244,15 @@
     }
     // show this phone's own progress immediately, even before it syncs
     if (save.lb.name) out[save.lb.name] = { level: save.level, solved: Object.values(save.levels).filter((r) => r.done).length, stars: totalStars(), at: new Date().toISOString() };
+    return out;
+  }
+  function lbTreats() {
+    const out = {};
+    for (const [player, puzzle, t, lv, dy, at] of save.lb.rows) {
+      if (puzzle !== 'progress:treats') continue;
+      if (!out[player] || at > out[player].at) out[player] = { total: t - 1, levels: lv, dailies: dy, at };
+    }
+    if (save.lb.name) { const m = treatTotals(); out[save.lb.name] = { total: m.total, levels: m.levels, dailies: m.dailies, at: new Date().toISOString() }; }
     return out;
   }
   // who won each puzzle / day
@@ -1291,11 +1320,25 @@
       html += '<div class="group-label">Levels</div><div class="group">' + two.map((p, k) => {
         const r = lv[p];
         if (!r) return '<div class="set-row">' + avatar(p, k) + '<span class="label">' + escapeHtml(p) + '<small>No levels shared yet</small></span></div>';
-        const size = levelConfig(r.level).size;
+        const size = baseSize(r.level);
         return '<div class="set-row">' + avatar(p, k) + '<span class="label">' + escapeHtml(p) + (p === me ? ' <small class="inline">(you)</small>' : '') +
           '<small>' + r.solved + ' solved · ' + r.stars + ' ★ · ' + size + '×' + size + ' boards</small></span>' +
           '<span class="lb-level">' + (top === p && !tied ? '👑 ' : '') + 'Level ' + r.level + '</span></div>';
       }).join('') + '</div>';
+    }
+    // treats saved on first tries
+    const tr = lbTreats();
+    const trPlayers = two.filter((p) => tr[p]);
+    if (trPlayers.length) {
+      const tTop = trPlayers.length > 1 && tr[trPlayers[0]].total !== tr[trPlayers[1]].total ? trPlayers.reduce((a, b) => (tr[a].total >= tr[b].total ? a : b)) : null;
+      html += '<div class="group-label">Treats Saved</div><div class="group">' + two.map((p, k) => {
+        const r = tr[p];
+        if (!r) return '<div class="set-row">' + avatar(p, k) + '<span class="label">' + escapeHtml(p) + '<small>No treats shared yet</small></span></div>';
+        return '<div class="set-row">' + avatar(p, k) + '<span class="label">' + escapeHtml(p) + (p === me ? ' <small class="inline">(you)</small>' : '') +
+          '<small>' + r.levels + ' from levels · ' + r.dailies + ' from dailies</small></span>' +
+          '<span class="lb-level">' + (tTop === p ? '👑 ' : '') + r.total + ' 🍪</span></div>';
+      }).join('') + '</div>';
+      html += '<div class="group-foot">Treats left at the end of each puzzle\'s first try. Replays don\'t add more; skipping or starting over counts 0.</div>';
     }
     // one day, puzzle by puzzle
     const dr = dayResult(lbDay, best);
