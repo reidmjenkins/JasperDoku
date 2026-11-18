@@ -283,7 +283,7 @@
     const s = G.spec;
     $('#game-title').textContent = s.mode === 'level' ? (s.golden ? '✨ Golden Level ' + s.id : 'Level ' + s.id) : s.mode === 'daily' ? 'Daily #' + s.n + (s.day === todayStr() ? '' : ' · ' + shortDate(s.day)) : 'Free Play';
     const firstNote = G && (s.mode === 'level' || s.mode === 'daily') ? (G.firstRun ? ' · Treats count' : ' · Practice') : '';
-    const diffWord = s.golden ? ' · One golden treat' + firstNote : s.mode === 'level' ? firstNote : s.mode === 'free' ? ' · ' + cap(save.settings.freeDiff) : s.mode === 'daily' ? (G.counts ? ' · Counts for leaderboard' : ' · Practice') : '';
+    const diffWord = s.golden ? ' · One golden treat' : s.mode === 'level' ? firstNote : s.mode === 'free' ? ' · ' + cap(save.settings.freeDiff) : s.mode === 'daily' ? (G.counts ? ' · Counts for leaderboard' : ' · Practice') : '';
     $('#game-sub').textContent = G.N + ' × ' + G.N + diffWord;
     $('#timer').classList.toggle('hidden-timer', !save.settings.timer);
     renderTimer();
