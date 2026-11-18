@@ -47,7 +47,7 @@
     level: 1,
     levels: {},
     daily: { streak: 0, last: null, best: 0, done: {}, forfeit: {} },
-    settings: { autoX: false, timer: true, vibrate: true, sound: true, fxVol: 0.7, winVol: 0.8, theme: 'auto', freeSize: 7, freeDiff: 'medium' },
+    settings: { autoX: false, timer: true, vibrate: true, sound: true, fxVol: 0.7, winVol: 0.8, theme: 'auto', holiday: 'auto', freeSize: 7, freeDiff: 'medium' },
     progress: {},
     seenHowTo: false,
     seenTutorial: false,
@@ -120,6 +120,39 @@
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
   function yesterdayStr() { const d = new Date(); d.setDate(d.getDate() - 1); return todayStr(d); }
+  // day number from a 'YYYY-MM-DD' string (used to share streaks on the leaderboard)
+  const dayNum = (ds) => { const [y, m, d] = ds.split('-').map(Number); return Math.round((Date.UTC(y, m - 1, d) - Date.UTC(2026, 0, 1)) / 864e5); };
+  function streakNow() {
+    const d = save.daily, today = todayStr();
+    const alive = d.last === today || d.last === yesterdayStr();
+    return { n: alive ? d.streak : 0, today: d.last === today, alive, best: d.best || 0 };
+  }
+  // ---- winter holiday look: Auto (Nov 15 – Jan 6), On, or Off
+  function holidayOn() {
+    const h = save.settings.holiday || 'auto';
+    if (h !== 'auto') return h === 'on';
+    const d = new Date(), m = d.getMonth(), day = d.getDate();
+    return m === 11 || (m === 10 && day >= 15) || (m === 0 && day <= 6);
+  }
+  function applyHoliday() {
+    const on = holidayOn();
+    document.body.classList.toggle('holiday', on);
+    const d = new Date(), xmas = d.getMonth() === 11 && (d.getDate() === 24 || d.getDate() === 25);
+    const tag = document.querySelector('.tagline');
+    if (tag) tag.textContent = !on ? 'A cozy logic puzzle' : xmas ? 'Meowy Christmas from Jasper' : 'A cozy winter logic puzzle';
+    const snow = document.getElementById('snow');
+    if (snow && on && !snow.childElementCount) {
+      for (let k = 0; k < 26; k++) {
+        const f = document.createElement('i');
+        f.style.left = (k * 37 % 100) + '%';
+        f.style.setProperty('--sz', (3 + (k * 7) % 5) + 'px');
+        f.style.animationDuration = (9 + (k * 13) % 9) + 's';
+        f.style.animationDelay = -((k * 17) % 14) + 's';
+        f.style.setProperty('--drift', ((k % 2 ? 1 : -1) * (10 + k % 20)) + 'px');
+        snow.appendChild(f);
+      }
+    }
+  }
   // Ten puzzles a day, the same for everyone, getting bigger and trickier.
   const DAILY_LADDER = [
     { size: 5, maxTier: 3, minTier: 0 }, { size: 6, maxTier: 3, minTier: 1 }, { size: 6, maxTier: 4, minTier: 2 },
@@ -601,7 +634,7 @@
     const lost = G.wrongPlaced;
     const stars = lost === 0 ? 3 : lost === 1 ? 2 : 1;
     const spec = G.spec;
-    let milestone = 0;
+    let milestone = 0, streakUp = 0;
     if (spec.mode === 'level') {
       const prev = save.levels[spec.id] || {};
       const nextSize = baseSize(spec.id + 1);
@@ -620,6 +653,8 @@
           save.daily.streak = save.daily.last === yesterdayStr() ? save.daily.streak + 1 : 1;
           save.daily.last = spec.day;
           save.daily.best = Math.max(save.daily.best || 0, save.daily.streak);
+          streakUp = save.daily.streak;
+          setTimeout(() => lbSync(), 600);
         }
         save.daily.done[spec.id] = { time: G.elapsed, stars, hints: G.hints };
       } else if (G.elapsed < save.daily.done[spec.id].time) {
@@ -642,18 +677,23 @@
     const puzzleKey = spec.mode === 'daily' ? 'daily:' + spec.id : null;
     if (puzzleKey && G.counts) lbQueue(puzzleKey, G.elapsed, G.wrongPlaced, G.hints);
     const myScore = G.elapsed + HINT_PENALTY * G.hints, counted = !!G.counts;
-    setTimeout(() => { showWin(stars, { milestone, unlocked }); if (puzzleKey) lbWinCompare(puzzleKey, myScore, counted); }, 450);
+    setTimeout(() => { showWin(stars, { milestone, unlocked, streakUp }); if (puzzleKey) lbWinCompare(puzzleKey, myScore, counted); }, 450);
   }
 
+  const FLAME = '<svg class="flame" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c1 3.5 5 5.5 5 10.5A5 5 0 0 1 7 12.5c0-2 1-3.5 2-4.5 0 2 1 3 2 3 0-3-1-6 1-9Z" fill="currentColor"/></svg>';
   const WIN_TITLES = ['Jasper approves!', 'Purrfect!', 'Treats for everyone!', 'Nap spot secured!', 'Clever human!'];
   function showWin(stars, info) {
     info = info || {};
     sfx('win');
     const flawless = G.hints === 0 && G.wrongPlaced === 0;
-    $('#win-title').textContent = info.milestone ? 'Level up!' : flawless ? 'Flawless! Purrfect!' : WIN_TITLES[Math.floor(Math.random() * WIN_TITLES.length)];
+    const titles = holidayOn() ? WIN_TITLES.concat(['Meowy Christmas!', 'Snow problem!', 'Fa la la la purr!']) : WIN_TITLES;
+    $('#win-title').textContent = info.milestone ? 'Level up!' : flawless ? 'Flawless! Purrfect!' : titles[Math.floor(Math.random() * titles.length)];
     const ms = $('#win-milestone');
     ms.hidden = !info.milestone;
     if (info.milestone) ms.innerHTML = '<span class="ms-grid" style="--n:' + info.milestone + '"></span><div><b>' + info.milestone + ' × ' + info.milestone + ' boards unlocked</b><small>Bigger boards, trickier puzzles</small></div>';
+    const wsk = $('#win-streak');
+    wsk.hidden = !info.streakUp;
+    if (info.streakUp) wsk.innerHTML = FLAME + '<b>' + info.streakUp + '-day streak!</b><small>' + (info.streakUp === 1 ? 'Come back tomorrow to make it 2' : 'Kept alive for today') + '</small>';
     const ub = $('#win-badges');
     $('#win-rival').innerHTML = '';
     ub.innerHTML = (info.unlocked || []).length ? '<small class="wb-label">New achievement' + (info.unlocked.length > 1 ? 's' : '') + '</small><div class="wb-chips">' + info.unlocked.map((a) => '<span class="win-badge"><i>' + a.icon + '</i><b>' + a.name + '</b></span>').join('') + '</div>' : '';
@@ -666,7 +706,7 @@
     $('#win-next').textContent = nextLabel;
     const conf = $('#confetti');
     conf.innerHTML = '';
-    const bits = ['🐾', '✨', '🐟', '💛', '🧶'];
+    const bits = holidayOn() ? ['❄️', '🎄', '🎁', '⭐', '🐾'] : ['🐾', '✨', '🐟', '💛', '🧶'];
     for (let k = 0; k < 36; k++) {
       const s = document.createElement('span');
       s.textContent = bits[k % bits.length];
@@ -724,7 +764,7 @@
     const k = firstKey(G.spec);
     if (!k || !G.firstRun || k in save.first) return doStartOver(); // practice: no penalty, no question
     openModal('<h2>Are you sure?</h2><p>Starting over counts as finishing <b>' + puzzleTitle() + '</b> with <b>0 treats</b> on the leaderboard. Treats only count on a puzzle\'s first completion.</p>' +
-      actions([['Start over · 0 🍪', 'start-over-yes', 'danger'], ['Cancel', 'start-over-no', 'ghost']]));
+      actions([['Start over · 0 treats', 'start-over-yes', 'danger'], ['Cancel', 'start-over-no', 'ghost']]));
   }
   function doStartOver(recordZero) {
     closeModal();
@@ -761,6 +801,24 @@
     const streakAlive = save.daily.last === todayStr() || save.daily.last === yesterdayStr();
     const todayCount = dailyDoneCount(todayStr());
     $('#home-streak').textContent = (streakAlive ? save.daily.streak : 0) + ' day' + ((streakAlive ? save.daily.streak : 0) === 1 ? '' : 's');
+    {
+      const sk = streakNow(), card = $('#streak-card');
+      card.classList.toggle('lit', sk.today);
+      card.classList.toggle('waiting', sk.alive && !sk.today);
+      $('#sc-title').textContent = sk.n ? sk.n + '-day streak' : 'Start a streak';
+      $('#sc-sub').textContent = sk.today ? 'Done for today · best ' + Math.max(sk.best, sk.n)
+        : sk.alive ? 'Play a daily today to keep it'
+        : 'One daily a day builds it' + (sk.best > 1 ? ' · best ' + sk.best : '');
+      // last 7 days: which ones are part of the current streak
+      let dots = '';
+      const lastN = sk.alive ? dayNum(save.daily.last) : -1e9, firstN = lastN - sk.n + 1;
+      for (let k = 6; k >= 0; k--) {
+        const d = new Date(); d.setDate(d.getDate() - k);
+        const n = dayNum(todayStr(d)), on = n >= firstN && n <= lastN;
+        dots += '<i class="' + (on ? 'on' : '') + (k === 0 ? ' today' : '') + '" title="' + d.toLocaleDateString(undefined, { weekday: 'long' }) + '">' + d.toLocaleDateString(undefined, { weekday: 'narrow' }) + '</i>';
+      }
+      $('#sc-week').innerHTML = dots;
+    }
     $('#home-daily-sub').textContent = todayCount === DAILY_COUNT ? 'All 10 solved today!' : 'Today: ' + todayCount + ' of ' + DAILY_COUNT + ' solved';
     // level progress card
     const recs = Object.values(save.levels);
@@ -842,6 +900,11 @@
       ['auto', 'light', 'dark'].map((t) => '<button class="choice' + (s.theme === t ? ' on' : '') + '" data-theme-pick="' + t + '">' + cap(t) + '</button>').join('') +
       '</div></div></div>' +
       '<div class="group-foot">Auto matches your phone\'s light or dark setting.</div>' +
+      '<div class="group-label">Winter look</div>' +
+      '<div class="group"><div class="set-row"><div class="choice-grid">' +
+      ['auto', 'on', 'off'].map((t) => '<button class="choice' + ((s.holiday || 'auto') === t ? ' on' : '') + '" data-holiday-pick="' + t + '">' + cap(t) + '</button>').join('') +
+      '</div></div></div>' +
+      '<div class="group-foot">Snow, a Santa hat for Jasper and winter treats. Auto shows it from Nov 15 to Jan 6.</div>' +
 
       '<div class="group-label">Sound</div>' +
       '<div class="group">' + sw('sound', 'Sounds') +
@@ -1225,12 +1288,19 @@
           save.lb.pending.push({ puzzle: 'progress:treats', time: Math.min(86400, tt.total + 1), mistakes: Math.min(999, tt.levels), hints: Math.min(999, tt.dailies), treatKey });
           persist();
         }
+        const sk = streakNow(), streakKey = save.daily.streak + '/' + (save.daily.best || 0) + '/' + save.daily.last;
+        if (save.daily.last && save.lb.sentStreak !== streakKey) {
+          save.lb.pending = save.lb.pending.filter((p) => p.puzzle !== 'progress:streak');
+          save.lb.pending.push({ puzzle: 'progress:streak', time: Math.min(86400, save.daily.streak + 1), mistakes: Math.min(999, sk.best), hints: ((dayNum(save.daily.last) % 1000) + 1000) % 1000, streakKey });
+          persist();
+        }
         // send anything waiting (works later if the phone was offline)
         while (save.lb.pending.length) {
           const p = save.lb.pending[0];
           await rpc('submit_score', { p_room: save.lb.room, p_player: save.lb.name, p_puzzle: p.puzzle, p_time: p.time, p_mistakes: p.mistakes, p_hints: p.hints });
           if (p.progKey) save.lb.sentProgress = p.progKey;
           if (p.treatKey) save.lb.sentTreats = p.treatKey;
+          if (p.streakKey) save.lb.sentStreak = p.streakKey;
           save.lb.pending.shift(); persist();
         }
         const rows = await rpc('get_scores', { p_room: save.lb.room, p_since: save.lb.since || '1970-01-01T00:00:00Z' });
@@ -1290,6 +1360,18 @@
     }
     // show this phone's own progress immediately, even before it syncs
     if (save.lb.name) out[save.lb.name] = { level: save.level, solved: Object.values(save.levels).filter((r) => r.done).length, stars: totalStars(), at: new Date().toISOString() };
+    return out;
+  }
+  // each player's daily streak (only counts if their last daily was today or yesterday)
+  function lbStreaks() {
+    const out = {}, latest = {};
+    for (const [player, puzzle, t, best, last, at] of save.lb.rows) {
+      if (puzzle !== 'progress:streak') continue;
+      if (!latest[player] || at > latest[player].at) latest[player] = { t, best, last, at };
+    }
+    const tn = ((dayNum(todayStr()) % 1000) + 1000) % 1000, yn = ((dayNum(yesterdayStr()) % 1000) + 1000) % 1000;
+    for (const [p, r] of Object.entries(latest)) out[p] = (r.last === tn || r.last === yn) ? r.t - 1 : 0;
+    if (save.lb.name) out[save.lb.name] = streakNow().n;
     return out;
   }
   function lbTreats() {
@@ -1369,8 +1451,10 @@
       const winVals = Object.fromEntries(two.map((p) => [p, wins[p] || 0]));
       html += scoreCard((p) => wins[p] || 0, (p) => 'puzzles won · ' + (dayWins[p] || 0) + ' days', crownOf(winVals));
       html += '<div class="group-foot center">' + shared + ' daily puzzle' + (shared === 1 ? '' : 's') + ' raced · first completion only · hints add ' + HINT_PENALTY + 's</div>';
+      const stk = lbStreaks();
       html += '<div class="group">' + chipRow('Days won', Object.fromEntries(two.map((p) => [p, dayWins[p] || 0])), (v) => v) +
-        chipRow('Treats saved', pick(tr, (r) => r.dailies), (v) => v + ' 🍪') + '</div>';
+        chipRow('Daily streak', Object.fromEntries(two.filter((p) => stk[p] !== undefined).map((p) => [p, stk[p]])), (v) => v + (v === 1 ? ' day' : ' days')) +
+        chipRow('Treats saved', pick(tr, (r) => r.dailies), (v) => v + ' ' + treatSVG('treat inline-treat')) + '</div>';
       // one day, puzzle by puzzle
       const dr = dayResult(lbDay, best);
       const dayTitle = lbDay === todayStr() ? 'Today' : shortDate(lbDay);
@@ -1401,7 +1485,7 @@
       const lvVals = pick(lv, (r) => r.level);
       html += scoreCard((p) => (lv[p] ? lv[p].level : '–'), (p) => (lv[p] ? 'current level · ' + baseSize(lv[p].level) + '×' + baseSize(lv[p].level) : 'not shared yet'), crownOf(lvVals));
       html += '<div class="group">' +
-        chipRow('Treats saved', pick(tr, (r) => r.levels), (v) => v + ' 🍪') +
+        chipRow('Treats saved', pick(tr, (r) => r.levels), (v) => v + ' ' + treatSVG('treat inline-treat')) +
         chipRow('Levels solved', pick(lv, (r) => r.solved), (v) => v) +
         chipRow('Stars', pick(lv, (r) => r.stars), (v) => v + ' ★') + '</div>';
     }
@@ -1473,6 +1557,8 @@
       if (k === 'sound') { openSettings(); if (save.settings.sound) sfx('place'); }
       return;
     }
+    const hp = e.target.closest('[data-holiday-pick]');
+    if (hp) { save.settings.holiday = hp.dataset.holidayPick; persist(); applyHoliday(); document.querySelectorAll('[data-holiday-pick]').forEach((b) => b.classList.toggle('on', b === hp)); return; }
     const tp = e.target.closest('[data-theme-pick]');
     if (tp) { save.settings.theme = tp.dataset.themePick; persist(); applyTheme(); document.querySelectorAll('[data-theme-pick]').forEach((b) => b.classList.toggle('on', b === tp)); return; }
     const fs = e.target.closest('[data-free-size]');
@@ -1588,6 +1674,7 @@
   if (window.matchMedia) { try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme); } catch (e) { /* old browser */ } }
 
   applyTheme();
+  applyHoliday();
   lbSync().then((ok) => { if (ok) renderHome(); });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) lbSync().then((ok) => { if (ok && $('#screen-home').classList.contains('active')) renderHome(); }); });
   paintJasperImages();

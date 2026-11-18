@@ -593,3 +593,44 @@ html.dark .level-tile.golden small { color: #FFD45C; }
 .logo-face, .win-face, .sheet-face, .modal-face, .tut-card .sheet-face { background: #F6F0E4 var(--lq-jasper-full) center / cover no-repeat; }
 .win.golden .win-face { background: #FFF6E8 var(--lq-leo-full) center / cover no-repeat; }
 .jasper-img, .piece-img { background: transparent; }
+
+/* small treat biscuit used inline in text (leaderboard chips) */
+svg.treat.inline-treat { display: inline-block; width: 1.15em; height: 1.05em; vertical-align: -0.18em; }
+
+/* ---------- daily streak ---------- */
+.streak-card { width: 100%; display: flex; align-items: center; gap: 12px; background: var(--card); border-radius: 14px; padding: 12px 14px; margin: 0 0 14px; box-shadow: var(--shadow-1); text-align: left; }
+.streak-card:active { background: var(--fill); }
+.sc-flame { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--fill); color: var(--ink-3); }
+.sc-flame svg { width: 24px; height: 24px; }
+.streak-card.lit .sc-flame { background: linear-gradient(160deg, #FFB547, #FF6A3D); color: #fff; box-shadow: 0 4px 12px rgba(255, 106, 61, .35); }
+.streak-card.waiting .sc-flame { background: var(--chip-bg); color: var(--chip-ink); animation: flameWait 2.4s ease-in-out infinite; }
+@keyframes flameWait { 50% { transform: scale(1.06); } }
+.sc-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.sc-text b { font-size: 16px; font-weight: 650; }
+.sc-text small { color: var(--ink-2); font-size: 13px; }
+.sc-week { flex: none; display: flex; gap: 4px; }
+.sc-week i { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font: 600 10px/1 inherit; font-style: normal; color: var(--ink-3); background: var(--fill); }
+.sc-week i.on { background: #FF8A3D; color: #fff; }
+.sc-week i.today { box-shadow: 0 0 0 1.5px var(--ink-3); }
+.sc-week i.today.on { box-shadow: 0 0 0 1.5px #FF8A3D, 0 0 0 3px var(--card); }
+@media (max-width: 430px) { .sc-week i:nth-child(-n+2) { display: none; } }
+@media (max-width: 360px) { .sc-week i:nth-child(-n+4) { display: none; } }
+.win-streak { display: flex; flex-direction: column; align-items: center; gap: 1px; margin: 4px 0 10px; color: #FF6A3D; }
+.win-streak .flame { width: 26px; height: 26px; }
+.win-streak b { font-size: 16px; }
+.win-streak small { color: var(--ink-2); font-size: 12px; }
+
+/* ---------- winter look ---------- */
+.snow { display: none; }
+body.holiday .snow { display: block; position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 0; }
+body.holiday #screen-home > *:not(.snow) { position: relative; z-index: 1; }
+.snow i { position: absolute; top: -12px; width: var(--sz); height: var(--sz); border-radius: 50%; background: #BFD3EA; opacity: .75; animation: snowFall linear infinite; }
+html.dark .snow i { background: #FFFFFF; opacity: .55; }
+@keyframes snowFall { to { transform: translate(var(--drift), 105vh); } }
+.holiday-hat { display: none; }
+body.holiday .holiday-hat { display: block; position: absolute; z-index: 2; width: 82px; left: 50%; top: -34px; transform: translateX(-4px) rotate(14deg); filter: drop-shadow(0 3px 4px rgba(0,0,0,.15)); pointer-events: none; }
+body.holiday .hero h1 span { color: #D2343E; }
+html.dark body.holiday .hero h1 span { color: #FF6B6B; }
+body.holiday .play-btn:not(.golden) { background: linear-gradient(180deg, #2F9467, #23774F); }
+body.holiday .home-date::after { content: "  ❄"; }
+@media (prefers-reduced-motion: reduce) { .snow i { animation: none; display: none; } .streak-card.waiting .sc-flame { animation: none; } }

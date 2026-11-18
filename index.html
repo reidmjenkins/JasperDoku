@@ -22,6 +22,7 @@
 
     <!-- ============ HOME ============ -->
     <section id="screen-home" class="screen active">
+      <div class="snow" id="snow" aria-hidden="true"></div>
       <header class="home-top">
         <span class="home-date" id="home-date"></span>
         <button class="icon-btn" data-action="settings" aria-label="Settings">
@@ -32,7 +33,7 @@
       <div class="hero">
         <div class="halo">
           <span class="orbit o1"></span><span class="orbit o2"></span><span class="orbit o3"></span>
-          <div class="logo-face"><img class="jasper-img" alt="Jasper" src="assets/jasper-full.webp" decoding="async"></div>
+          <svg class="holiday-hat" viewBox="0 0 120 90" aria-hidden="true"><path d="M14 72C30 30 60 4 98 14c-8 10-10 24-4 40l8 18Z" fill="#D2343E"/><path d="M40 60C52 34 70 18 92 16" fill="none" stroke="#B02A33" stroke-width="3" opacity=".5"/><circle cx="100" cy="16" r="11" fill="#fff"/><rect x="4" y="62" width="106" height="22" rx="11" fill="#fff"/></svg><div class="logo-face"><img class="jasper-img" alt="Jasper" src="assets/jasper-full.webp" decoding="async"></div>
         </div>
         <h1>Jasper<span>Doku</span></h1>
         <p class="tagline">A cozy logic puzzle</p>
@@ -57,6 +58,12 @@
       <button class="btn primary big play-btn" data-action="continue">
         <svg viewBox="0 0 24 24"><path d="M8 5.5v13a1 1 0 0 0 1.5.9l10.4-6.5a1 1 0 0 0 0-1.8L9.5 4.6A1 1 0 0 0 8 5.5Z" fill="currentColor"/></svg>
         <span id="home-level-label">Play Level 1</span>
+      </button>
+
+      <button class="streak-card" id="streak-card" data-action="daily">
+        <span class="sc-flame" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2c1 3.5 5 5.5 5 10.5A5 5 0 0 1 7 12.5c0-2 1-3.5 2-4.5 0 2 1 3 2 3 0-3-1-6 1-9Z" fill="currentColor"/></svg></span>
+        <span class="sc-text"><b id="sc-title">Start a streak</b><small id="sc-sub"></small></span>
+        <span class="sc-week" id="sc-week" aria-label="Last 7 days"></span>
       </button>
 
       <nav class="menu-card">
@@ -260,6 +267,7 @@
         <div class="win-face"><img class="jasper-img" alt="Jasper"></div>
         <h2 id="win-title">Jasper approves!</h2>
         <div class="win-milestone" id="win-milestone" hidden></div>
+        <div class="win-streak" id="win-streak" hidden></div>
         <div class="stars" id="win-stars"></div>
         <div class="win-stats">
           <div><span id="win-time">0:00</span><small>time</small></div>
