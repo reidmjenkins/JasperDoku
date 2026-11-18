@@ -546,6 +546,7 @@
         best: prev.best ? Math.min(prev.best, G.elapsed) : G.elapsed,
       };
       save.level = Math.max(save.level, spec.id + 1);
+      setTimeout(() => lbSync(), 600);
     } else if (spec.mode === 'daily') {
       if (!save.daily.done[spec.id]) {
         // the first daily solved today grows the streak; catch-up days don't
@@ -632,6 +633,7 @@
     if (s.mode === 'level') {
       if (!save.levels[s.id]) save.levels[s.id] = { skipped: true };
       save.level = Math.max(save.level, s.id + 1);
+      setTimeout(() => lbSync(), 600);
       persist();
       startGame(levelSpec(s.id + 1));
     } else if (s.mode === 'daily') {
@@ -1039,10 +1041,19 @@
     if (lbBusy && !force) return lbBusy;
     lbBusy = (async () => {
       try {
+        // share level progress when it changed since last time
+        const solvedN = Object.values(save.levels).filter((r) => r.done).length;
+        const progKey = save.level + '/' + solvedN + '/' + totalStars();
+        if (save.lb.sentProgress !== progKey) {
+          save.lb.pending = save.lb.pending.filter((p) => p.puzzle !== 'progress:level');
+          save.lb.pending.push({ puzzle: 'progress:level', time: save.level, mistakes: Math.min(999, solvedN), hints: Math.min(999, totalStars()), progKey });
+          persist();
+        }
         // send anything waiting (works later if the phone was offline)
         while (save.lb.pending.length) {
           const p = save.lb.pending[0];
           await rpc('submit_score', { p_room: save.lb.room, p_player: save.lb.name, p_puzzle: p.puzzle, p_time: p.time, p_mistakes: p.mistakes, p_hints: p.hints });
+          if (p.progKey) save.lb.sentProgress = p.progKey;
           save.lb.pending.shift(); persist();
         }
         const rows = await rpc('get_scores', { p_room: save.lb.room, p_since: save.lb.since || '1970-01-01T00:00:00Z' });
@@ -1087,10 +1098,21 @@
     return best;
   }
   function lbPlayers() {
-    const set = new Set(save.lb.rows.filter((r) => /^daily:/.test(r[1])).map((r) => r[0]));
+    const set = new Set(save.lb.rows.filter((r) => /^(daily:|progress:level$)/.test(r[1])).map((r) => r[0]));
     if (save.lb.name) set.add(save.lb.name);
     const me = save.lb.name;
     return [...set].sort((a, b) => (a === me ? -1 : b === me ? 1 : a.localeCompare(b)));
+  }
+  // each player's latest level progress
+  function lbLevels() {
+    const out = {};
+    for (const [player, puzzle, level, solved, stars, at] of save.lb.rows) {
+      if (puzzle !== 'progress:level') continue;
+      if (!out[player] || at > out[player].at) out[player] = { level, solved, stars, at };
+    }
+    // show this phone's own progress immediately, even before it syncs
+    if (save.lb.name) out[save.lb.name] = { level: save.level, solved: Object.values(save.levels).filter((r) => r.done).length, stars: totalStars(), at: new Date().toISOString() };
+    return out;
   }
   // who won each puzzle / day
   function lbWinner(entry) {
@@ -1148,6 +1170,21 @@
       '<div class="lb-player">' + avatar(p, k) + '<b>' + escapeHtml(p) + (p === me ? ' <small>(you)</small>' : '') + '</b><strong>' + (wins[p] || 0) + '</strong><small>puzzles won · ' + (dayWins[p] || 0) + ' days</small></div>').join('<div class="lb-vs">vs</div>') +
       (players.length < 2 ? '<div class="lb-vs">vs</div><div class="lb-player waiting">' + avatar('?', 1) + '<b>Waiting…</b><small>Join with the same family code</small></div>' : '') + '</div>';
     html += '<div class="group-foot center">' + shared + ' daily puzzle' + (shared === 1 ? '' : 's') + ' raced · first try only · hints add ' + HINT_PENALTY + 's</div>';
+    // level progress
+    const lv = lbLevels();
+    const lvPlayers = two.filter((p) => lv[p]);
+    if (lvPlayers.length) {
+      const top = lvPlayers.length > 1 ? lvPlayers.reduce((a, b) => (lv[a].level >= lv[b].level ? a : b)) : null;
+      const tied = lvPlayers.length > 1 && lv[lvPlayers[0]].level === lv[lvPlayers[1]].level;
+      html += '<div class="group-label">Levels</div><div class="group">' + two.map((p, k) => {
+        const r = lv[p];
+        if (!r) return '<div class="set-row">' + avatar(p, k) + '<span class="label">' + escapeHtml(p) + '<small>No levels shared yet</small></span></div>';
+        const size = levelConfig(r.level).size;
+        return '<div class="set-row">' + avatar(p, k) + '<span class="label">' + escapeHtml(p) + (p === me ? ' <small class="inline">(you)</small>' : '') +
+          '<small>' + r.solved + ' solved · ' + r.stars + ' ★ · ' + size + '×' + size + ' boards</small></span>' +
+          '<span class="lb-level">' + (top === p && !tied ? '👑 ' : '') + 'Level ' + r.level + '</span></div>';
+      }).join('') + '</div>';
+    }
     // one day, puzzle by puzzle
     const dr = dayResult(lbDay, best);
     const dayTitle = lbDay === todayStr() ? 'Today' : shortDate(lbDay);
@@ -1199,7 +1236,8 @@
     if (!lbReady()) return 'Race each other on the dailies';
     const { wins, players } = headToHead();
     if (players.length < 2) return 'Waiting for a rival to join';
-    return players.slice(0, 2).map((p) => (p === save.lb.name ? 'You' : p) + ' ' + (wins[p] || 0)).join(' – ') + ' puzzles';
+    const lv = lbLevels(), rival = players.find((p) => p !== save.lb.name);
+    return players.slice(0, 2).map((p) => (p === save.lb.name ? 'You' : p) + ' ' + (wins[p] || 0)).join(' – ') + ' puzzles' + (rival && lv[rival] ? ' · ' + rival + ' on Level ' + lv[rival].level : '');
   }
 
   // ---------------------------------------------------------------- misc UI
