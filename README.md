@@ -11,7 +11,9 @@ Jaspers **never touch** each other, not even corner to corner.
 - **Tap Jasper** once → takes Jasper off
 - **Drag** across squares → cross out many at once (start on a ✕ to erase many)
 
-**3 treats (lives):** placing Jasper on a wrong square flashes red, breaks a treat and crosses the square out. Out of treats → refill and keep going, or start the puzzle over. Stars: 3 = no mistakes, 2 = one, 1 = more.
+**3 treats (lives):** placing Jasper on a wrong square flashes red, breaks a treat and crosses the square out. Out of treats → start the puzzle over (no refills). Stars: 3 = no mistakes, 2 = one, 1 = more.
+
+**Golden treat levels:** every 7–15 levels (the same level numbers on every phone, from a fixed seed: 9, 19, 28, 40, 49, 61…) there's an 8 × 8 golden level starring **Leo**, with only **one** treat. Leo follows exactly the same rules as Jasper. Lose the treat → start over on the same puzzle.
 
 ## Play it on this PC
 Double-click `start-jasperdoku.cmd`, then open http://localhost:5177

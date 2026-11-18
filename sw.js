@@ -1,8 +1,8 @@
 // Offline support: keep a copy of the game on the device.
-const CACHE = 'jasperdoku-v9';
+const CACHE = 'jasperdoku-v10';
 const FILES = [
   './', './index.html', './css/style.css', './js/config.js', './js/engine.js', './js/app.js',
-  './assets/jasper.png', './assets/jasper-full.png', './assets/jasper-placeholder.svg', './assets/icon-192.png', './assets/icon-512.png', './assets/apple-touch-icon.png', './manifest.webmanifest',
+  './assets/jasper.png', './assets/jasper-full.png', './assets/leo.png', './assets/leo-full.png', './assets/jasper-placeholder.svg', './assets/icon-192.png', './assets/icon-512.png', './assets/apple-touch-icon.png', './manifest.webmanifest',
 ];
 self.addEventListener('install', (e) => {
   // 'reload' skips the browser's short-term file cache so a new version is saved right away
