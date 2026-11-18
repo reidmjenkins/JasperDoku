@@ -19,22 +19,24 @@
   ];
 
   // ---------------------------------------------------------------- Jasper's face
-  // Drop a square photo at assets/jasper.jpg (or .png) and it is used everywhere.
-  let jasperSrc = 'assets/jasper.png';
+  // Jasper's and Leo's pictures: small WebP files, loaded once and then kept on the phone.
+  let jasperSrc = 'assets/jasper.webp';
+  const PICS = ['assets/jasper.webp', 'assets/jasper-full.webp', 'assets/leo.webp', 'assets/leo-full.webp'];
+  const preloaded = [];
   function findJasperPhoto() {
-    const tries = ['assets/jasper.png', 'assets/jasper.jpg', 'assets/jasper.jpeg', 'assets/jasper.webp'];
-    (function next(i) {
-      if (i >= tries.length) { jasperSrc = jasperFullSrc = 'assets/jasper-placeholder.svg'; document.body.classList.remove('has-photo'); paintJasperImages(); return; }
+    // start every picture downloading/decoding right away so they're ready before they're needed
+    for (const src of PICS) {
       const img = new Image();
-      img.onload = () => { jasperSrc = tries[i]; jasperFullSrc = tries[i] === 'assets/jasper.png' ? 'assets/jasper-full.png' : tries[i]; document.body.classList.add('has-photo'); paintJasperImages(); if (G) renderCells(true); };
-      img.onerror = () => next(i + 1);
-      img.src = tries[i] + '?v=' + Date.now();
-    })(0);
+      img.decoding = 'async';
+      img.src = src;
+      if (img.decode) img.decode().catch(() => {});
+      preloaded.push(img);
+    }
   }
   // Big profile circles show Jasper's whole head (ears too); board pieces use the close-up face.
-  let jasperFullSrc = 'assets/jasper-full.png';
+  let jasperFullSrc = 'assets/jasper-full.webp';
   function paintJasperImages() {
-    document.querySelectorAll('.jasper-img').forEach((el) => { el.src = el.closest('.piece') ? jasperSrc : jasperFullSrc; });
+    document.querySelectorAll('.jasper-img').forEach((el) => { const want = el.closest('.piece') ? jasperSrc : jasperFullSrc; if (el.getAttribute('src') !== want) el.src = want; });
   }
 
   // ---------------------------------------------------------------- saving
@@ -111,7 +113,7 @@
   function levelSpec(n) { return Object.assign({ mode: 'level', id: n, seed: 'level-' + n }, levelConfig(n)); }
   // Leo replaces Jasper's picture on golden levels only; the rules are identical.
   const isGoldenGame = () => !!(G && G.spec && G.spec.golden);
-  const pieceSrc = () => (isGoldenGame() ? 'assets/leo.png' : jasperSrc);
+  const pieceSrc = () => (isGoldenGame() ? 'assets/leo.webp' : jasperSrc);
   const pieceName = () => (isGoldenGame() ? 'Leo' : 'Jasper');
   function todayStr(d) {
     d = d || new Date();
@@ -421,7 +423,7 @@
   }
   function outOfTreats() {
     const gold = isGoldenGame();
-    const face = gold ? 'assets/leo-full.png' : jasperFullSrc;
+    const face = gold ? 'assets/leo-full.webp' : jasperFullSrc;
     const msg = gold
       ? 'Golden levels only have one treat. Start over and try again. It\'s the same puzzle.'
       : 'That was the last treat on this board. Start over with a fresh board and ' + G.maxLives + ' new treats.' + (G.spec.mode === 'daily' ? ' Your timer keeps running.' : '');
@@ -674,7 +676,7 @@
       conf.appendChild(s);
     }
     paintJasperImages();
-    if (G.spec.golden) { $('#win .win-face .jasper-img').src = 'assets/leo-full.png'; $('#win-title').textContent = 'Golden level cleared!'; }
+    if (G.spec.golden) { $('#win .win-face .jasper-img').src = 'assets/leo-full.webp'; $('#win-title').textContent = 'Golden level cleared!'; }
     $('#win').classList.toggle('golden', !!G.spec.golden);
     $('#win').hidden = false;
   }
@@ -1589,6 +1591,7 @@
   lbSync().then((ok) => { if (ok) renderHome(); });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) lbSync().then((ok) => { if (ok && $('#screen-home').classList.contains('active')) renderHome(); }); });
   paintJasperImages();
+  document.body.classList.add('has-photo');
   findJasperPhoto();
   renderHome();
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
