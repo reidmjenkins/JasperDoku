@@ -793,7 +793,7 @@
 
       '<div class="group-label">Leaderboard</div>' +
       '<div class="group">' +
-      '<label class="set-row input-row"><span class="label">Your name</span><input id="lb-name" maxlength="24" placeholder="e.g. Reid" value="' + escapeHtml(save.lb.name) + '" autocomplete="off"></label>' +
+      '<label class="set-row input-row"><span class="label">Your name</span><input id="lb-name" maxlength="24" placeholder="Your name" value="' + escapeHtml(save.lb.name) + '" autocomplete="off"></label>' +
       '<label class="set-row input-row"><span class="label">Family code</span><input id="lb-room" maxlength="40" placeholder="jasper-…" value="' + escapeHtml(save.lb.room) + '" autocomplete="off" autocapitalize="off" spellcheck="false"></label>' +
       '<button class="set-row link-row" data-action="lb-join"><span class="label">' + (lbReady() ? 'Save & Sync' : 'Join Leaderboard') + '</span><span class="lb-status" id="lb-status">' + lbStatusText() + '</span></button>' +
       '</div>' +
