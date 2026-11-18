@@ -1,0 +1,1103 @@
+/* JasperDoku - game screens, input, hints and saving. */
+(function () {
+  'use strict';
+  const E = window.JasperEngine;
+  const { OPEN, OUT, JASPER } = E;
+
+  // ---------------------------------------------------------------- colors
+  const PALETTE = [
+    { name: 'Coral', hex: '#FF9F94' },
+    { name: 'Tangerine', hex: '#FFBE6B' },
+    { name: 'Lemon', hex: '#FFDE70' },
+    { name: 'Mint', hex: '#9BDDB0' },
+    { name: 'Lime', hex: '#CFE584' },
+    { name: 'Sky', hex: '#8ECDF7' },
+    { name: 'Slate', hex: '#B4BFCD' },
+    { name: 'Lavender', hex: '#C3A9F5' },
+    { name: 'Pink', hex: '#F9AFCF' },
+    { name: 'Latte', hex: '#D2B394' },
+  ];
+
+  // ---------------------------------------------------------------- Jasper's face
+  // Drop a square photo at assets/jasper.jpg (or .png) and it is used everywhere.
+  let jasperSrc = 'assets/jasper-placeholder.svg';
+  function findJasperPhoto() {
+    const tries = ['assets/jasper.png', 'assets/jasper.jpg', 'assets/jasper.jpeg', 'assets/jasper.webp'];
+    (function next(i) {
+      if (i >= tries.length) return;
+      const img = new Image();
+      img.onload = () => { jasperSrc = tries[i]; jasperFullSrc = tries[i] === 'assets/jasper.png' ? 'assets/jasper-full.png' : tries[i]; document.body.classList.add('has-photo'); paintJasperImages(); if (G) renderCells(true); };
+      img.onerror = () => next(i + 1);
+      img.src = tries[i] + '?v=' + Date.now();
+    })(0);
+  }
+  // Big profile circles show Jasper's whole head (ears too); board pieces use the close-up face.
+  let jasperFullSrc = 'assets/jasper-placeholder.svg';
+  function paintJasperImages() {
+    document.querySelectorAll('.jasper-img').forEach((el) => { el.src = el.closest('.piece') ? jasperSrc : jasperFullSrc; });
+  }
+
+  // ---------------------------------------------------------------- saving
+  const STORE_KEY = 'jasperdoku.v1';
+  const MAX_LIVES = 3;
+  const canVibrate = typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
+  const defaults = () => ({
+    level: 1,
+    levels: {},
+    daily: { streak: 0, last: null, done: {} },
+    settings: { autoX: false, timer: true, vibrate: true, sound: true, fxVol: 0.7, winVol: 0.8, theme: 'auto', freeSize: 7, freeDiff: 'medium' },
+    progress: {},
+    seenHowTo: false,
+    seenTutorial: false,
+    stats: { wins: 0, flawless: 0, noHint: 0, free: 0, daily: 0, refillWins: 0, big10: 0 },
+    achievements: {},
+  });
+  let save = load();
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (raw) {
+        const d = defaults(), s = JSON.parse(raw);
+        return Object.assign(d, s, { settings: Object.assign(d.settings, s.settings || {}), daily: Object.assign(d.daily, s.daily || {}), stats: Object.assign(d.stats, s.stats || {}), achievements: s.achievements || {} });
+      }
+    } catch (e) { /* storage unavailable - play without saving */ }
+    return defaults();
+  }
+  function persist() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(save)); } catch (e) { /* ignore */ }
+  }
+
+  // ---------------------------------------------------------------- puzzle specs
+  function levelConfig(n) {
+    const size = n <= 4 ? 5 : n <= 12 ? 6 : n <= 28 ? 7 : n <= 50 ? 8 : n <= 80 ? 9 : 10;
+    const maxTier = n <= 2 ? 1 : n <= 6 ? 2 : n <= 12 ? 3 : 4;
+    const minTier = n >= 20 ? 3 : 0;
+    return { size, maxTier, minTier };
+  }
+  function levelSpec(n) { return Object.assign({ mode: 'level', id: n, seed: 'level-' + n }, levelConfig(n)); }
+  function todayStr(d) {
+    d = d || new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function yesterdayStr() { const d = new Date(); d.setDate(d.getDate() - 1); return todayStr(d); }
+  function dailySpec(day) { const t = day || todayStr(); return { mode: 'daily', id: t, seed: 'daily-' + t, size: 8, maxTier: 4, minTier: 3 }; }
+  const DIFFS = { easy: { maxTier: 2, minTier: 0 }, medium: { maxTier: 3, minTier: 2 }, hard: { maxTier: 4, minTier: 3 } };
+  function freeSpec() {
+    const s = save.settings, seed = 'free-' + Date.now() + '-' + Math.floor(Math.random() * 1e6);
+    return Object.assign({ mode: 'free', id: seed, seed, size: s.freeSize }, DIFFS[s.freeDiff] || DIFFS.medium);
+  }
+  const specKey = (spec) => spec.mode + ':' + spec.id;
+
+  // ---------------------------------------------------------------- game state
+  let G = null; // current game
+  const $ = (sel) => document.querySelector(sel);
+  const boardEl = $('#board');
+
+  function startGame(spec) {
+    showLoading(true);
+    setTimeout(() => {
+      const puzzle = E.generate({ size: spec.size, seed: spec.seed, maxTier: spec.maxTier, minTier: spec.minTier });
+      const N = puzzle.size;
+      const rng = E.mulberry32(puzzle.seed ^ 0x9e3779b9);
+      const order = PALETTE.map((_, i) => i);
+      for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+      G = {
+        spec, puzzle, N, reg: puzzle.regions,
+        colors: order.slice(0, N).map((i) => PALETTE[i]),
+        units: E.buildUnits(N, puzzle.regions),
+        state: new Array(N * N).fill(OPEN),
+        history: [], elapsed: 0, hints: 0, wrongPlaced: 0, lives: MAX_LIVES, knownWrong: [], done: false,
+      };
+      // resume a half-finished board
+      const cur = (save.progress || {})[specKey(spec)];
+      if (cur && cur.state && cur.state.length === N * N) {
+        G.state = cur.state.slice(); G.elapsed = cur.elapsed || 0; G.hints = cur.hints || 0; G.wrongPlaced = cur.wrongPlaced || 0; G.lives = cur.lives === undefined ? MAX_LIVES : cur.lives; G.knownWrong = cur.knownWrong || [];
+      }
+      saveCurrent();
+      buildBoard();
+      renderHeader();
+      showScreen('game');
+      showLoading(false);
+
+    }, 30);
+  }
+
+  function saveCurrent() {
+    if (!G || G.done) return;
+    save.progress = save.progress || {};
+    const key = specKey(G.spec);
+    delete save.progress[key]; // re-insert so it counts as most recent
+    save.progress[key] = { state: G.state, elapsed: G.elapsed, hints: G.hints, wrongPlaced: G.wrongPlaced, lives: G.lives, knownWrong: G.knownWrong };
+    const keys = Object.keys(save.progress);
+    while (keys.length > 8) delete save.progress[keys.shift()]; // keep the 8 most recent boards
+    persist();
+  }
+  function forgetProgress() {
+    if (G && save.progress) delete save.progress[specKey(G.spec)];
+  }
+
+  function isSolution(i) { return G.puzzle.solution[(i / G.N) | 0] === i % G.N; }
+
+  // ---------------------------------------------------------------- board drawing
+  function styleCell(el, i, N, reg, colors, inner, tight) {
+    const r = (i / N) | 0, c = i % N;
+    el.style.background = colors[reg[i]].hex;
+    el.style.border = '0 solid var(--board-bg)';
+    el.style.borderWidth = inner + 'px';
+    const rr = (tight + inner) + 'px';
+    el.style.borderRadius = rr;
+    void r; void c;
+  }
+  function buildBoard() {
+    const { N, reg } = G;
+    boardEl.style.setProperty('--n', N);
+    boardEl.innerHTML = '';
+    const inner = N >= 9 ? 0.75 : 1;          // half the small gap between every square
+    const gap = inner;                        // same gap between patches - color tells them apart
+    const tight = N >= 9 ? 4 : N >= 7 ? 5 : 6; // corner rounding on every square
+    for (let i = 0; i < N * N; i++) {
+      const r = (i / N) | 0, c = i % N;
+      const el = document.createElement('div');
+      el.className = 'cell';
+      el.dataset.i = i;
+      el.style.background = G.colors[reg[i]].hex;
+      // a side is a "boundary" if it's the board edge or the next square is another patch
+      const top = r === 0 || reg[i - N] !== reg[i];
+      const bottom = r === N - 1 || reg[i + N] !== reg[i];
+      const left = c === 0 || reg[i - 1] !== reg[i];
+      const right = c === N - 1 || reg[i + 1] !== reg[i];
+      const w = (b) => (b ? gap : inner);
+      const bt = w(top), bb = w(bottom), bl = w(left), br = w(right);
+      el.style.border = '0 solid var(--board-bg)';
+      el.style.borderWidth = bt + 'px ' + br + 'px ' + bb + 'px ' + bl + 'px';
+      // every square gets the same small rounded corners on its colored part
+      // (outer radius = tight + border so the visible color keeps an even curve)
+      el.style.borderTopLeftRadius = (tight + bl) + 'px ' + (tight + bt) + 'px';
+      el.style.borderTopRightRadius = (tight + br) + 'px ' + (tight + bt) + 'px';
+      el.style.borderBottomRightRadius = (tight + br) + 'px ' + (tight + bb) + 'px';
+      el.style.borderBottomLeftRadius = (tight + bl) + 'px ' + (tight + bb) + 'px';
+      el.setAttribute('role', 'gridcell');
+      boardEl.appendChild(el);
+    }
+    renderCells(true);
+  }
+
+  function renderCells(force) {
+    if (!G) return;
+    const { N, reg, state } = G;
+    const bad = E.conflicts(N, reg, state);
+    const auto = new Set();
+    if (save.settings.autoX) {
+      for (let q = 0; q < N * N; q++) if (state[q] === JASPER) E.attacked(N, reg, q).forEach((i) => auto.add(i));
+    }
+    const cells = boardEl.children;
+    for (let i = 0; i < N * N; i++) {
+      const el = cells[i];
+      let kind = state[i] === JASPER ? 'j' : state[i] === OUT ? 'x' : auto.has(i) ? 'a' : 'o';
+      const wrong = false;
+      const key = kind + (bad.has(i) ? 'c' : '') + (wrong ? 'w' : '') + jasperSrc;
+      if (!force && el._key === key) continue;
+      const wasJ = el._key && el._key[0] === 'j';
+      el._key = key;
+      el.classList.toggle('conflict', bad.has(i));
+      el.classList.toggle('wrong', wrong);
+      el.classList.toggle('auto', kind === 'a');
+      if (kind === 'j') {
+        if (!wasJ || force) el.innerHTML = '<div class="piece"><img class="jasper-img" alt="Jasper" src="' + jasperSrc + '"></div>';
+      } else if (kind === 'x' || kind === 'a') {
+        el.innerHTML = '<div class="mark"></div>';
+      } else {
+        el.innerHTML = '';
+      }
+      el.setAttribute('aria-label', 'Row ' + ((i / N | 0) + 1) + ', column ' + (i % N + 1) + ', ' + G.colors[reg[i]].name + (kind === 'j' ? ', Jasper' : kind === 'o' ? '' : ', crossed out'));
+    }
+  }
+
+  function renderHeader() {
+    const s = G.spec;
+    $('#game-title').textContent = s.mode === 'level' ? 'Level ' + s.id : s.mode === 'daily' ? 'Daily Puzzle' : 'Free Play';
+    const diffWord = s.mode === 'free' ? ' · ' + cap(save.settings.freeDiff) : '';
+    $('#game-sub').textContent = G.N + ' × ' + G.N + diffWord;
+    $('#timer').classList.toggle('hidden-timer', !save.settings.timer);
+    renderTimer();
+    renderLives();
+  }
+  function renderTimer() { if (G) $('#timer').textContent = fmtTime(G.elapsed); }
+  function fmtTime(sec) {
+    const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+    return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s).padStart(2, '0');
+  }
+  const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+  setInterval(() => {
+    if (!G || G.done || document.hidden || !$('#modal').hidden || !$('#screen-game').classList.contains('active')) return;
+    G.elapsed++;
+    renderTimer();
+    if (G.elapsed % 5 === 0) saveCurrent();
+  }, 1000);
+
+  // ---------------------------------------------------------------- moves
+  function setCells(changes) {
+    // changes: [{i, to}] -> applied as one undo step
+    const step = [];
+    for (const ch of changes) {
+      const from = G.state[ch.i];
+      if (from === ch.to) continue;
+      step.push({ i: ch.i, from, to: ch.to });
+      G.state[ch.i] = ch.to;
+      if (ch.to === JASPER && !isSolution(ch.i)) G.wrongPlaced++;
+    }
+    if (step.length) G.history.push(step);
+    afterChange(step);
+  }
+  function afterChange(step) {
+    clearHint();
+    renderCells();
+    const placed = step ? step.filter((s) => s.to === JASPER) : [];
+    if (step && step.length) sfx(placed.length ? 'place' : step.some((s) => s.to === OUT) ? 'mark' : 'erase');
+    if (placed.length && save.settings.vibrate && navigator.vibrate) navigator.vibrate(12);
+    saveCurrent();
+    checkWin();
+  }
+  function undo() {
+    if (!G || G.done) return;
+    const step = G.history.pop();
+    if (!step) return toast('Nothing to undo');
+    for (let k = step.length - 1; k >= 0; k--) G.state[step[k].i] = step[k].from;
+    afterChange(null);
+  }
+  /*
+   * Taps: ONE tap toggles ✕ (or removes a Jasper) - it can never place Jasper,
+   * so a single tap can never cost a treat. A DOUBLE-tap places Jasper.
+   * The first tap of a double-tap is undone so the square ends up as just "Jasper".
+   */
+  const DOUBLE_TAP_MS = 350;
+  let lastTap = null;
+  function tap(i) {
+    const now = Date.now();
+    if (lastTap && lastTap.i === i && now - lastTap.t < DOUBLE_TAP_MS) {
+      // double-tap: take back the first tap, then place Jasper
+      if (lastTap.changed) { G.history.pop(); G.state[i] = lastTap.from; }
+      lastTap = null;
+      if (G.state[i] === JASPER) return renderCells();
+      if (!isSolution(i)) return wrongMove(i);
+      setCells([{ i, to: JASPER }]);
+      return;
+    }
+    const s = G.state[i];
+    const autoShown = s === OPEN && save.settings.autoX && boardEl.children[i].classList.contains('auto');
+    const to = s === JASPER ? OPEN : s === OUT ? OPEN : autoShown ? OPEN : OUT;
+    lastTap = { i, t: now, from: s, changed: to !== s };
+    if (to !== s) setCells([{ i, to }]);
+  }
+
+  // ---------------------------------------------------------------- lives (treats)
+  function treatSVG(cls) {
+    return '<svg class="' + cls + '" viewBox="0 0 40 36" aria-hidden="true"><path d="M20 33.5C8.5 26 2.5 19.5 2.5 11.5a8.7 8.7 0 0 1 17.5-3.3 8.7 8.7 0 0 1 17.5 3.3C37.5 19.5 31.5 26 20 33.5Z"/><circle cx="13" cy="13" r="1.8"/><circle cx="27" cy="13" r="1.8"/><circle cx="20" cy="20" r="1.8"/></svg>';
+  }
+  function renderLives() {
+    if (!G) return;
+    let html = '';
+    for (let k = 0; k < MAX_LIVES; k++) html += '<span class="life' + (k < G.lives ? '' : ' gone') + '">' + treatSVG('treat') + '</span>';
+    $('#lives').innerHTML = html;
+  }
+  function wrongMove(i) {
+    if (!G.knownWrong.includes(i)) sfx('wrong');
+    if (G.knownWrong.includes(i)) {
+      // already paid for this square - just remind, no treat lost
+      const el = boardEl.children[i];
+      G.state[i] = OUT;
+      renderCells();
+      el.classList.remove('nudge'); void el.offsetWidth; el.classList.add('nudge');
+      toast('Already ruled out - no treat lost');
+      return;
+    }
+    if (G.lives <= 0) return outOfTreats();
+    G.knownWrong.push(i);
+    G.lives--;
+    G.wrongPlaced++;
+    clearHint();
+    const el = boardEl.children[i];
+    // red flash + a red treat cracking in half on the square
+    el.classList.remove('flash-red'); void el.offsetWidth; el.classList.add('flash-red');
+    const fx = document.createElement('div');
+    fx.className = 'break-fx';
+    fx.innerHTML = treatSVG('half left') + treatSVG('half right');
+    el.appendChild(fx);
+    setTimeout(() => { fx.remove(); el.classList.remove('flash-red'); }, 900);
+    // the square is now known to be wrong, so cross it out
+    G.state[i] = OUT;
+    renderCells();
+    el.appendChild(fx);
+    // break one treat in the counter
+    const lifeEls = document.querySelectorAll('#lives .life');
+    const lostEl = lifeEls[G.lives];
+    if (lostEl) lostEl.classList.add('breaking');
+    setTimeout(renderLives, 600);
+    if (save.settings.vibrate && navigator.vibrate) navigator.vibrate([50, 40, 50]);
+    saveCurrent();
+    if (G.lives === 0) setTimeout(outOfTreats, 950);
+  }
+  function outOfTreats() {
+    openModal('<div class="modal-face"><img class="jasper-img" alt="" src="' + jasperFullSrc + '"></div><h2>Jasper ate all the treats!</h2><p>Three wrong spots on this board. Grab more treats and keep going, or start this puzzle fresh.</p>' +
+      actions([['Refill treats &amp; keep going', 'refill', 'primary'], ['Start this puzzle over', 'start-over', 'ghost']]));
+  }
+
+  // ---------------------------------------------------------------- touch / mouse input
+  let drag = null;
+  function cellAt(x, y) {
+    const el = document.elementFromPoint(x, y);
+    const cell = el && el.closest && el.closest('.cell');
+    return cell && boardEl.contains(cell) ? +cell.dataset.i : -1;
+  }
+  boardEl.addEventListener('pointerdown', (e) => {
+    if (!G || G.done) return;
+    const i = cellAt(e.clientX, e.clientY);
+    if (i < 0) return;
+    e.preventDefault();
+    boardEl.setPointerCapture && boardEl.setPointerCapture(e.pointerId);
+    const s = G.state[i];
+    drag = { start: i, last: i, moved: false, mode: s === OPEN ? 'mark' : s === OUT ? 'erase' : null, changes: [] };
+  });
+  boardEl.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const i = cellAt(e.clientX, e.clientY);
+    if (i < 0 || i === drag.last) return;
+    const from = drag.last;
+    drag.last = i;
+    if (!drag.mode) return;
+    if (!drag.moved) { drag.moved = true; dragPaint(drag.start); }
+    // fill in every square between the last one and this one (fast swipes skip squares)
+    const N = G.N, r0 = (from / N) | 0, c0 = from % N, r1 = (i / N) | 0, c1 = i % N;
+    const steps = Math.max(Math.abs(r1 - r0), Math.abs(c1 - c0));
+    for (let k = 1; k <= steps; k++) {
+      dragPaint(Math.round(r0 + ((r1 - r0) * k) / steps) * N + Math.round(c0 + ((c1 - c0) * k) / steps));
+    }
+  });
+  function dragPaint(i) {
+    const s = G.state[i];
+    if (drag.mode === 'mark' && s === OPEN) { G.state[i] = OUT; drag.changes.push({ i, from: OPEN, to: OUT }); }
+    if (drag.mode === 'erase' && s === OUT) { G.state[i] = OPEN; drag.changes.push({ i, from: OUT, to: OPEN }); }
+    renderCells();
+  }
+  function endDrag() {
+    if (!drag) return;
+    const d = drag; drag = null;
+    if (!d.moved) { tap(d.start); return; }
+    lastTap = null;
+    if (d.changes.length) G.history.push(d.changes);
+    afterChange(d.changes);
+  }
+  boardEl.addEventListener('pointerup', endDrag);
+  boardEl.addEventListener('pointercancel', endDrag);
+  boardEl.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  // ---------------------------------------------------------------- hints
+  let currentHint = null;
+  const unitName = (u) => (u.kind === 'row' ? 'row ' + (u.idx + 1) : u.kind === 'col' ? 'column ' + (u.idx + 1) : 'the ' + patchName(u.idx) + ' patch');
+  const patchName = (k) => '<b>' + G.colors[k].name + '</b>';
+  function joinList(a) { return a.length <= 1 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]; }
+
+  function findHint() {
+    const { N, reg } = G;
+    for (let i = 0; i < N * N; i++) {
+      if (G.state[i] === JASPER && !isSolution(i)) {
+        return { text: 'This Jasper is in the wrong spot. Let\'s move them.', focus: [i], elim: [i], apply: [{ i, to: OPEN }] };
+      }
+    }
+    for (let i = 0; i < N * N; i++) {
+      if (G.state[i] === OUT && isSolution(i)) {
+        return { text: 'One of your ✕ marks is covering a spot Jasper actually needs.', focus: [i], place: i, apply: [{ i, to: OPEN }] };
+      }
+    }
+    const trusted = G.state.slice();
+    let step;
+    for (let guard = 0; guard < 500; guard++) {
+      step = E.nextStep(N, reg, trusted, 4, G.units);
+      // with auto-cross on, tidy-up steps are already visible, so skip past them
+      if (step && step.type === 'tidy' && save.settings.autoX) { E.applyStep(trusted, step); continue; }
+      break;
+    }
+    if (step && step.tier >= 0) return describe(step);
+    // fallback (should not happen): reveal one answer cell
+    const r = G.puzzle.solution.findIndex((c, row) => G.state[row * N + c] !== JASPER);
+    const i = r * N + G.puzzle.solution[r];
+    return { text: 'Jasper wants to sit right here.', focus: [i], place: i, apply: [{ i, to: JASPER }] };
+  }
+
+  function describe(st) {
+    const apply = [];
+    if (st.place !== undefined) apply.push({ i: st.place, to: JASPER });
+    (st.eliminate || []).forEach((i) => apply.push({ i, to: OUT }));
+    const base = { focus: st.focus || [], elim: st.eliminate || [], place: st.place, apply };
+    const N = G.N;
+    let text;
+    switch (st.type) {
+      case 'tidy': {
+        const q = st.focus[0];
+        text = 'This Jasper already claims their row, column and ' + patchName(G.reg[q]) + ' patch, and nobody can sit right next to them. Cross out the marked spots.';
+        break;
+      }
+      case 'last':
+        text = 'There\'s only one spot left in ' + unitName(st.unit) + '. Jasper goes there!';
+        break;
+      case 'patchInLine': {
+        const lineWord = st.line.kind === 'row' ? 'row ' + (st.line.idx + 1) : 'column ' + (st.line.idx + 1);
+        text = 'The ' + patchName(st.unit.idx) + ' patch only has room left in ' + lineWord + '. So its Jasper will use up ' + lineWord + ', and the other spots in that line can be crossed out.';
+        break;
+      }
+      case 'lineInPatch':
+        text = 'Every open spot in ' + unitName(st.unit) + ' is inside the ' + patchName(st.line.idx) + ' patch. That patch\'s Jasper must come from ' + unitName(st.unit) + ', so the rest of the patch can be crossed out.';
+        break;
+      case 'wouldBlock':
+        text = 'If Jasper sat in the marked spot, ' + unitName(st.unit) + ' would have nowhere left to put its Jasper. So that spot can be crossed out.';
+        break;
+      case 'group': {
+        const lineWord = (k) => (st.targetKind === 'row' ? 'row' : 'column');
+        if (st.groupWord === 'patches') {
+          const names = joinList(st.groups.map((u) => patchName(u.idx)));
+          const lines = st.keys.slice().sort((a, b) => a - b).map((k) => k + 1);
+          const lw = lineWord() + 's ' + joinList(lines.map(String));
+          text = 'The ' + names + ' patches all fit inside ' + lw + ' - ' + st.groups.length + ' patches, ' + st.groups.length + ' lines. Those lines are full up, so anything else in ' + lw + ' can be crossed out.';
+        } else {
+          const lw = (st.groupWord === 'rows' ? 'Rows ' : 'Columns ') + joinList(st.groups.map((u) => String(u.idx + 1)));
+          const names = joinList(st.keys.map((k) => patchName(k)));
+          text = lw + ' can only use spots inside the ' + names + ' patches. Those patches get their Jaspers from these lines, so the rest of those patches can be crossed out.';
+        }
+        break;
+      }
+      default:
+        text = 'Try the highlighted spots.';
+    }
+    void N;
+    return Object.assign(base, { text });
+  }
+
+  function showHint() {
+    if (!G || G.done) return;
+    sfx('hint');
+    G.hints++;
+    saveCurrent();
+    currentHint = findHint();
+    boardEl.classList.add('hinting');
+    const cells = boardEl.children;
+    currentHint.focus.forEach((i) => cells[i].classList.add('h-focus'));
+    (currentHint.elim || []).forEach((i) => cells[i].classList.add('h-elim'));
+    if (currentHint.place !== undefined) cells[currentHint.place].classList.add('h-place');
+    $('#hint-text').innerHTML = currentHint.text;
+    $('#hint-sheet').hidden = false;
+  }
+  function clearHint() {
+    currentHint = null;
+    $('#hint-sheet').hidden = true;
+    boardEl.classList.remove('hinting');
+    boardEl.querySelectorAll('.h-focus, .h-elim, .h-place').forEach((el) => el.classList.remove('h-focus', 'h-elim', 'h-place'));
+  }
+  function applyHint() {
+    if (!currentHint) return;
+    const changes = currentHint.apply;
+    clearHint();
+    setCells(changes);
+  }
+
+  // ---------------------------------------------------------------- winning
+  function checkWin() {
+    const { N, reg, state } = G;
+    if (G.done) return;
+    let count = 0;
+    for (let i = 0; i < N * N; i++) if (state[i] === JASPER) count++;
+    if (count !== N || E.conflicts(N, reg, state).size) return;
+    G.done = true;
+    const lost = G.wrongPlaced;
+    const stars = lost === 0 ? 3 : lost === 1 ? 2 : 1;
+    const spec = G.spec;
+    let milestone = 0;
+    if (spec.mode === 'level') {
+      const prev = save.levels[spec.id] || {};
+      const nextSize = levelConfig(spec.id + 1).size;
+      if (!prev.done && nextSize > levelConfig(spec.id).size) milestone = nextSize;
+      save.levels[spec.id] = {
+        done: true,
+        stars: Math.max(stars, prev.stars || 0),
+        best: prev.best ? Math.min(prev.best, G.elapsed) : G.elapsed,
+      };
+      save.level = Math.max(save.level, spec.id + 1);
+    } else if (spec.mode === 'daily') {
+      if (!save.daily.done[spec.id]) {
+        // only today's puzzle grows the streak; catch-up days just get a checkmark
+        if (spec.id === todayStr()) {
+          save.daily.streak = save.daily.last === yesterdayStr() ? save.daily.streak + 1 : save.daily.last === spec.id ? save.daily.streak : 1;
+          save.daily.last = spec.id;
+          save.daily.best = Math.max(save.daily.best || 0, save.daily.streak);
+        }
+        save.daily.done[spec.id] = { time: G.elapsed, stars };
+      } else if (G.elapsed < save.daily.done[spec.id].time) {
+        save.daily.done[spec.id].time = G.elapsed;
+      }
+    }
+    const st = save.stats;
+    st.wins++;
+    if (G.hints === 0 && G.wrongPlaced === 0) st.flawless++;
+    if (G.hints === 0) st.noHint++;
+    if (spec.mode === 'free') st.free++;
+    if (spec.mode === 'daily') st.daily++;
+    if (G.refilled) st.refillWins++;
+    if (G.N === 10) st.big10++;
+    const unlocked = checkAchievements({ N: G.N, elapsed: G.elapsed, hints: G.hints });
+    forgetProgress();
+    persist();
+    setTimeout(() => showWin(stars, { milestone, unlocked }), 450);
+  }
+
+  const WIN_TITLES = ['Jasper approves!', 'Purrfect!', 'Treats for everyone!', 'Nap spot secured!', 'Clever human!'];
+  function showWin(stars, info) {
+    info = info || {};
+    sfx('win');
+    const flawless = G.hints === 0 && G.wrongPlaced === 0;
+    $('#win-title').textContent = info.milestone ? 'Level up!' : flawless ? 'Flawless! Purrfect!' : WIN_TITLES[Math.floor(Math.random() * WIN_TITLES.length)];
+    const ms = $('#win-milestone');
+    ms.hidden = !info.milestone;
+    if (info.milestone) ms.innerHTML = '<span class="ms-grid" style="--n:' + info.milestone + '"></span><div><b>' + info.milestone + ' × ' + info.milestone + ' boards unlocked</b><small>Bigger boards, trickier puzzles</small></div>';
+    const ub = $('#win-badges');
+    ub.innerHTML = (info.unlocked || []).length ? '<small class="wb-label">New achievement' + (info.unlocked.length > 1 ? 's' : '') + '</small><div class="wb-chips">' + info.unlocked.map((a) => '<span class="win-badge"><i>' + a.icon + '</i><b>' + a.name + '</b></span>').join('') + '</div>' : '';
+    $('#win').classList.toggle('busy', !!(info.milestone || (info.unlocked || []).length));
+    $('#win-stars').innerHTML = [1, 2, 3].map((n) => '<span class="' + (n <= stars ? '' : 'off') + '">★</span>').join('');
+    $('#win-time').textContent = fmtTime(G.elapsed);
+    $('#win-hints').textContent = G.hints;
+    const nextLabel = G.spec.mode === 'level' ? 'Level ' + (G.spec.id + 1) : G.spec.mode === 'daily' ? 'Daily calendar' : 'Another one';
+    $('#win-next').textContent = nextLabel;
+    const conf = $('#confetti');
+    conf.innerHTML = '';
+    const bits = ['🐾', '✨', '🐟', '💛', '🧶'];
+    for (let k = 0; k < 36; k++) {
+      const s = document.createElement('span');
+      s.textContent = bits[k % bits.length];
+      s.style.left = Math.random() * 100 + '%';
+      s.style.animationDuration = 2.2 + Math.random() * 2.5 + 's';
+      s.style.animationDelay = Math.random() * 1.2 + 's';
+      conf.appendChild(s);
+    }
+    paintJasperImages();
+    $('#win').hidden = false;
+  }
+  function winNext() {
+    $('#win').hidden = true;
+    const s = G.spec;
+    if (s.mode === 'level') startGame(levelSpec(s.id + 1));
+    else if (s.mode === 'daily') openDaily();
+    else startGame(freeSpec());
+  }
+
+  // ---------------------------------------------------------------- skip / restart
+  function skip() {
+    const s = G.spec;
+    const msg = s.mode === 'level'
+      ? 'Skip Level ' + s.id + '? You can come back to it any time from All Levels.'
+      : s.mode === 'daily' ? 'Skip today\'s puzzle? Your streak only grows when you finish it.' : 'Get a brand new puzzle?';
+    openModal('<h2>Skip?</h2><p>' + msg + '</p>' + actions([['Skip it', 'confirm-skip', 'primary'], ['Keep playing', 'close-modal', 'ghost']]));
+  }
+  function confirmSkip() {
+    closeModal();
+    const s = G.spec;
+    forgetProgress();
+    if (s.mode === 'level') {
+      if (!save.levels[s.id]) save.levels[s.id] = { skipped: true };
+      save.level = Math.max(save.level, s.id + 1);
+      persist();
+      startGame(levelSpec(s.id + 1));
+    } else if (s.mode === 'daily') {
+      persist(); goHome();
+    } else {
+      persist(); startGame(freeSpec());
+    }
+  }
+  function restart() {
+    if (!G || G.done) return;
+    const changes = [];
+    G.state.forEach((v, i) => { if (v !== OPEN) changes.push({ i, to: OPEN }); });
+    if (!changes.length) return;
+    setCells(changes);
+    toast('Board cleared - tap Undo to bring it back');
+  }
+
+  // ---------------------------------------------------------------- screens
+  function showScreen(name) {
+    document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('active', s.id === 'screen-' + name));
+    clearHint();
+    window.scrollTo(0, 0);
+  }
+  function goHome() {
+    $('#win').hidden = true;
+    if (G && !G.done) saveCurrent();
+    renderHome();
+    showScreen('home');
+  }
+  function renderHome() {
+    $('#home-level-label').textContent = (save.progress && save.progress['level:' + save.level] ? 'Continue' : 'Play') + ' Level ' + save.level;
+    const streakAlive = save.daily.last === todayStr() || save.daily.last === yesterdayStr();
+    const doneToday = !!save.daily.done[todayStr()];
+    $('#home-streak').textContent = (streakAlive ? save.daily.streak : 0) + ' day' + ((streakAlive ? save.daily.streak : 0) === 1 ? '' : 's');
+    $('#home-daily-sub').textContent = doneToday ? 'Solved today - come back tomorrow' : 'A fresh 8 × 8 every day';
+    // level progress card
+    const recs = Object.values(save.levels);
+    const solved = recs.filter((r) => r.done).length;
+    const stars = recs.reduce((t, r) => t + (r.done ? r.stars || 0 : 0), 0);
+    const skipped = recs.filter((r) => r.skipped && !r.done).length;
+    $('#home-level-num').textContent = save.level;
+    $('#home-solved').textContent = solved;
+    $('#home-stars').textContent = stars;
+    // progress through the current board size
+    const size = levelConfig(save.level).size;
+    let first = save.level, last = save.level;
+    while (first > 1 && levelConfig(first - 1).size === size) first--;
+    while (levelConfig(last + 1).size === size && last < 400) last++;
+    const pct = size === 10 ? 100 : Math.round(((save.level - first) / (last - first + 1)) * 100);
+    $('#home-bar').style.width = Math.max(4, pct) + '%';
+    $('#home-next').textContent = size === 10
+      ? 'Biggest boards: 10 × 10' + (skipped ? ' · ' + skipped + ' skipped to revisit' : '')
+      : (last - save.level + 1) + ' more until ' + (size + 1) + ' × ' + (size + 1) + ' boards' + (skipped ? ' · ' + skipped + ' skipped' : '');
+    $('#home-size').textContent = size + ' × ' + size;
+    $('#home-date').textContent = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+    $('#home-ach-sub').textContent = Object.keys(save.achievements).length + ' of ' + ACHIEVEMENTS.length + ' unlocked';
+  }
+  function renderLevels() {
+    const grid = $('#level-grid');
+    const max = Math.max(30, Math.ceil((save.level + 10) / 5) * 5);
+    let html = '', lastSize = 0;
+    for (let n = 1; n <= max; n++) {
+      const size = levelConfig(n).size;
+      if (size !== lastSize) { html += '<div class="level-size">' + size + ' × ' + size + '</div>'; lastSize = size; }
+      const rec = save.levels[n] || {};
+      const locked = n > save.level;
+      const cls = 'level-tile' + (n === save.level ? ' current' : '') + (locked ? ' locked' : '') + (rec.skipped && !rec.done ? ' skipped' : '');
+      const starHtml = rec.done ? '<span class="tile-stars">' + [1, 2, 3].map((k) => '<i class="' + (k <= (rec.stars || 1) ? 'on' : '') + '">★</i>').join('') + '</span>' : '';
+      const sub = rec.done ? fmtTime(rec.best || 0) : rec.skipped ? 'Skipped' : n === save.level ? 'Up next' : '';
+      const label = 'Level ' + n + (rec.done ? ', ' + rec.stars + ' stars, best time ' + fmtTime(rec.best || 0) : rec.skipped ? ', skipped' : locked ? ', locked' : '');
+      html += '<button class="' + cls + (rec.done ? ' done' : '') + '" data-level="' + n + '"' + (locked ? ' disabled' : '') + ' aria-label="' + label + '">' + starHtml + '<b>' + n + '</b><small>' + sub + '</small></button>';
+    }
+    grid.innerHTML = html;
+    const recs = Object.values(save.levels);
+    $('#levels-sub').textContent = recs.filter((r) => r.done).length + ' solved · ' + recs.reduce((t, r) => t + (r.done ? r.stars || 0 : 0), 0) + ' ★';
+    showScreen('levels');
+    const cur = grid.querySelector('.current');
+    if (cur) cur.scrollIntoView({ block: 'center' });
+  }
+
+  // ---------------------------------------------------------------- modals
+  function actions(list) {
+    return '<div class="modal-actions">' + list.map(([label, act, kind]) => '<button class="btn ' + kind + '" data-action="' + act + '">' + label + '</button>').join('') + '</div>';
+  }
+  function openModal(html, wide) { const c = $('#modal-card'); c.innerHTML = html; c.classList.toggle('wide', !!wide); $('#modal').hidden = false; }
+  function closeModal() { $('#modal').hidden = true; }
+
+  function openHowTo() {
+    openModal(
+      '<h2>How to play</h2>' +
+      '<div class="howto-step"><div class="num">1</div><p>Put <b>one Jasper</b> in every <b>color patch</b>.</p></div>' +
+      '<div class="howto-step"><div class="num">2</div><p>Put <b>one Jasper</b> in every <b>row</b> and every <b>column</b>.</p></div>' +
+      '<div class="howto-step"><div class="num">3</div><p>Jaspers <b>never touch</b> each other, not even corner to corner.</p></div>' +
+      '<p><b>Tap</b> a square once to cross it out ✕ (tap again to clear it). <b>Double-tap</b> to place Jasper. Tap Jasper once to take them off. <b>Drag</b> your finger to cross out lots of squares at once.</p>' +
+      '<p>You have <b>3 treats</b>. Put Jasper on a wrong square and a treat breaks. Run out? Just refill and keep going.</p>' +
+      '<p>Stuck? Hints are free and unlimited. They explain <i>why</i>, and can do the move for you.</p>' +
+      actions([["Got it", 'close-modal', 'primary'], ['Play the tutorial', 'tutorial', 'ghost']]), true
+    );
+  }
+
+  function openSettings() {
+    const s = save.settings;
+    const sw = (key, title, desc) => '<div class="set-row"><div class="label">' + title + (desc ? '<small>' + desc + '</small>' : '') + '</div><button class="switch' + (s[key] ? ' on' : '') + '" data-toggle="' + key + '" role="switch" aria-checked="' + !!s[key] + '" aria-label="' + title + '"></button></div>';
+    const quiet = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/></svg>';
+    const loud = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor" stroke="none"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>';
+    const slider = (key, title, desc) => '<div class="set-row slider-row"><div class="label">' + title + '<small>' + desc + '</small></div><div class="vol-wrap">' + quiet +
+      '<input type="range" min="0" max="100" step="1" value="' + Math.round(s[key] * 100) + '" data-volume="' + key + '" aria-label="' + title + '" style="--pct:' + Math.round(s[key] * 100) + '%"' + (s.sound ? '' : ' disabled') + '>' + loud + '</div></div>';
+    $('#settings-body').innerHTML =
+      '<div class="group-label">Appearance</div>' +
+      '<div class="group"><div class="set-row"><div class="choice-grid">' +
+      ['auto', 'light', 'dark'].map((t) => '<button class="choice' + (s.theme === t ? ' on' : '') + '" data-theme-pick="' + t + '">' + cap(t) + '</button>').join('') +
+      '</div></div></div>' +
+      '<div class="group-foot">Auto matches your phone\'s light or dark setting.</div>' +
+
+      '<div class="group-label">Sound</div>' +
+      '<div class="group">' + sw('sound', 'Sounds') +
+      slider('fxVol', 'Game sounds', 'Taps, placing Jasper, broken treats') +
+      slider('winVol', 'Celebrations', 'Hints and the winning chime') + '</div>' +
+      '<div class="group-label">Gameplay</div>' +
+      '<div class="group">' +
+      sw('autoX', 'Auto-cross', 'Lightly cross out squares a Jasper rules out') +
+      sw('timer', 'Show timer') +
+      (canVibrate ? sw('vibrate', 'Vibration') : '') + '</div>' +
+
+      '<div class="group-label">Progress</div>' +
+      '<div class="group">' +
+      '<button class="set-row link-row" data-action="backup-copy"><span class="label">Copy Backup Code</span><svg class="chev" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
+      '<button class="set-row link-row" data-action="backup-restore"><span class="label">Restore From Code</span><svg class="chev" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
+      '</div>' +
+      '<div class="group-foot">Progress is saved on this device. A backup code lets you move it to a new phone. Add JasperDoku to your Home Screen so it\'s never cleared.</div>' +
+      '<div class="group" style="margin-top:22px"><button class="set-row danger-row" data-action="reset-ask">Reset All Progress</button></div>' +
+      '<div class="group-foot" style="margin-bottom:8px">' +
+      '<a href="#" data-action="tutorial" class="foot-link">Replay the tutorial</a></div>';
+    showScreen('settings');
+  }
+  function openFreePlay() {
+    const s = save.settings;
+    const sizes = [5, 6, 7, 8, 9, 10].map((n) => '<button class="choice' + (s.freeSize === n ? ' on' : '') + '" data-free-size="' + n + '">' + n + '×' + n + '</button>').join('');
+    const diffs = ['easy', 'medium', 'hard'].map((d) => '<button class="choice' + (s.freeDiff === d ? ' on' : '') + '" data-free-diff="' + d + '">' + cap(d) + '</button>').join('');
+    openModal('<h2>Free Play</h2><p>Endless random puzzles. Pick a size and how tricky.</p><strong>Board size</strong><div class="choice-grid">' + sizes + '</div><strong>Difficulty</strong><div class="choice-grid">' + diffs + '</div>' + actions([['Start', 'free-start', 'primary'], ['Cancel', 'close-modal', 'ghost']]), true);
+  }
+
+  // ---------------------------------------------------------------- achievements
+  const ACHIEVEMENTS = [
+    { id: 'first', icon: '🐾', c: '#7ECFA0', name: 'First Pounce', desc: 'Solve your first puzzle', test: (x) => x.st.wins >= 1 },
+    { id: 'flawless', icon: '💎', c: '#8CB8F5', name: 'Purrfect', desc: 'Solve a puzzle with no mistakes and no hints', test: (x) => x.st.flawless >= 1 },
+    { id: 'flawless10', icon: '👑', c: '#FFC245', name: "The Cat's Whiskers", desc: '10 flawless solves', test: (x) => x.st.flawless >= 10 },
+    { id: 'nohint10', icon: '🧠', c: '#B79BF2', name: 'Independent Kitty', desc: 'Solve 10 puzzles without a hint', test: (x) => x.st.noHint >= 10 },
+    { id: 'lv10', icon: '🐱', c: '#FF9F94', name: 'Kitten', desc: 'Finish level 10', test: (x) => x.sv.level > 10 },
+    { id: 'size7', icon: '🧩', c: '#7FD3CC', name: 'Growing Up', desc: 'Unlock 7 × 7 boards', test: (x) => levelConfig(x.sv.level).size >= 7 },
+    { id: 'lv25', icon: '🐈', c: '#FFB861', name: 'Alley Cat', desc: 'Finish level 25', test: (x) => x.sv.level > 25 },
+    { id: 'lv50', icon: '🦁', c: '#F2A93B', name: 'Lion Heart', desc: 'Finish level 50', test: (x) => x.sv.level > 50 },
+    { id: 'lv100', icon: '🏆', c: '#FFC245', name: 'Legend of the Litter', desc: 'Finish level 100', test: (x) => x.sv.level > 100 },
+    { id: 'big10', icon: '🐯', c: '#E8A06A', name: 'Big Cat', desc: 'Solve a 10 × 10 puzzle', test: (x) => x.st.big10 >= 1 },
+    { id: 'speed6', icon: '⚡️', c: '#FFD45C', name: 'Quick Paws', desc: 'Solve a 6 × 6 in under 45 seconds, no hints', test: (x) => x.N === 6 && x.elapsed < 45 && x.hints === 0 },
+    { id: 'speed8', icon: '💨', c: '#8ECDF7', name: 'Zoomies', desc: 'Solve an 8 × 8 in under 2 minutes, no hints', test: (x) => x.N === 8 && x.elapsed < 120 && x.hints === 0 },
+    { id: 'daily1', icon: '☀️', c: '#FFB861', name: 'Morning Routine', desc: 'Solve a daily puzzle', test: (x) => x.st.daily >= 1 },
+    { id: 'streak3', icon: '🔥', c: '#FF8E80', name: 'Creature of Habit', desc: 'Reach a 3-day daily streak', test: (x) => (x.sv.daily.best || 0) >= 3 },
+    { id: 'streak7', icon: '📅', c: '#FF9F94', name: 'Weekly Whiskers', desc: 'Reach a 7-day daily streak', test: (x) => (x.sv.daily.best || 0) >= 7 },
+    { id: 'streak30', icon: '🌙', c: '#B79BF2', name: 'Devoted', desc: 'Reach a 30-day daily streak', test: (x) => (x.sv.daily.best || 0) >= 30 },
+    { id: 'stars50', icon: '⭐️', c: '#FFC245', name: 'Star Gazer', desc: 'Earn 50 stars on levels', test: (x) => x.stars >= 50 },
+    { id: 'refill', icon: '🍪', c: '#E9A85E', name: 'Nine Lives', desc: 'Win after refilling your treats', test: (x) => x.st.refillWins >= 1 },
+    { id: 'night', icon: '🦉', c: '#8F93E2', name: 'Night Owl', desc: 'Solve a puzzle between midnight and 4 AM', test: (x) => x.hour !== undefined && x.hour < 4 },
+    { id: 'early', icon: '🌅', c: '#FFB861', name: 'Early Bird', desc: 'Solve a puzzle between 4 and 7 AM', test: (x) => x.hour !== undefined && x.hour >= 4 && x.hour < 7 },
+    { id: 'free10', icon: '🎲', c: '#9BDDB0', name: 'Free Spirit', desc: 'Win 10 Free Play puzzles', test: (x) => x.st.free >= 10 },
+  ];
+  function totalStars() { return Object.values(save.levels).reduce((t, r) => t + (r.done ? r.stars || 0 : 0), 0); }
+  function checkAchievements(ctx) {
+    const x = Object.assign({ st: save.stats, sv: save, stars: totalStars(), hour: new Date().getHours() }, ctx || {});
+    const fresh = [];
+    for (const a of ACHIEVEMENTS) {
+      if (save.achievements[a.id]) continue;
+      let ok = false;
+      try { ok = a.test(x); } catch (e) { ok = false; }
+      if (ok) { save.achievements[a.id] = todayStr(); fresh.push(a); }
+    }
+    return fresh;
+  }
+  function openAchievements() {
+    const got = ACHIEVEMENTS.filter((a) => save.achievements[a.id]).length;
+    const row = (a) => {
+      const when = save.achievements[a.id];
+      return '<div class="ach-row' + (when ? '' : ' locked') + '"><span class="ach-icon" style="--c:' + a.c + '">' + (when ? a.icon : '🔒') + '</span>' +
+        '<div class="label">' + a.name + '<small>' + a.desc + '</small></div>' + (when ? '<span class="ach-date">' + shortDate(when) + '</span>' : '') + '</div>';
+    };
+    const unlocked = ACHIEVEMENTS.filter((a) => save.achievements[a.id]);
+    const locked = ACHIEVEMENTS.filter((a) => !save.achievements[a.id]);
+    $('#ach-body').innerHTML =
+      '<div class="ach-summary"><div class="ring" style="--p:' + Math.round((got / ACHIEVEMENTS.length) * 100) + '"><span>' + got + '</span></div><div><b>' + got + ' of ' + ACHIEVEMENTS.length + ' unlocked</b><small>Keep solving to collect them all</small></div></div>' +
+      (unlocked.length ? '<div class="group-label">Unlocked</div><div class="group">' + unlocked.map(row).join('') + '</div>' : '') +
+      (locked.length ? '<div class="group-label">Still to find</div><div class="group">' + locked.map(row).join('') + '</div>' : '');
+    showScreen('achievements');
+  }
+  function shortDate(str) {
+    const [y, m, d] = str.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
+
+  // ---------------------------------------------------------------- daily calendar
+  let calMonth = new Date(); calMonth.setDate(1);
+  function openDaily() { calMonth = new Date(); calMonth.setDate(1); renderDaily(); showScreen('daily'); }
+  function renderDaily() {
+    const today = todayStr();
+    const doneToday = save.daily.done[today];
+    const streakAlive = save.daily.last === today || save.daily.last === yesterdayStr();
+    const streak = streakAlive ? save.daily.streak : 0;
+    const total = Object.keys(save.daily.done).length;
+    $('#daily-stats').innerHTML =
+      '<div><strong>' + streak + '</strong><small>day streak</small></div>' +
+      '<div><strong>' + (save.daily.best || 0) + '</strong><small>best streak</small></div>' +
+      '<div><strong>' + total + '</strong><small>solved</small></div>';
+    $('#daily-play').innerHTML = doneToday
+      ? '<svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Solved today in ' + fmtTime(doneToday.time) + ' · Play again</span>'
+      : '<svg viewBox="0 0 24 24"><path d="M8 5.5v13a1 1 0 0 0 1.5.9l10.4-6.5a1 1 0 0 0 0-1.8L9.5 4.6A1 1 0 0 0 8 5.5Z" fill="currentColor"/></svg><span>Play Today\'s Puzzle</span>';
+    $('#daily-play').classList.toggle('done', !!doneToday);
+    // month grid
+    const y = calMonth.getFullYear(), m = calMonth.getMonth();
+    $('#cal-title').textContent = calMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+    const now = new Date();
+    $('#cal-next').disabled = y > now.getFullYear() || (y === now.getFullYear() && m >= now.getMonth());
+    const first = new Date(y, m, 1).getDay();
+    const days = new Date(y, m + 1, 0).getDate();
+    let html = ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d) => '<span class="cal-wd">' + d + '</span>').join('');
+    for (let k = 0; k < first; k++) html += '<span></span>';
+    for (let d = 1; d <= days; d++) {
+      const ds = todayStr(new Date(y, m, d));
+      const done = save.daily.done[ds];
+      const future = ds > today;
+      const cls = 'cal-day' + (done ? ' solved' : '') + (ds === today ? ' today' : '') + (future ? ' future' : '');
+      const label = shortDate(ds) + (done ? ', solved in ' + fmtTime(done.time) : future ? '' : ', not solved yet');
+      html += '<button class="' + cls + '" data-day="' + ds + '"' + (future ? ' disabled' : '') + ' aria-label="' + label + '"><span>' + d + '</span></button>';
+    }
+    $('#cal-grid').innerHTML = html;
+  }
+
+  // ---------------------------------------------------------------- tutorial (4 × 4, guided)
+  const TUT = {
+    N: 4,
+    reg: [2, 0, 1, 1, 2, 2, 1, 1, 2, 2, 3, 3, 2, 2, 3, 3],
+    colors: [PALETTE[3], PALETTE[2], PALETTE[8], PALETTE[5]], // Mint, Lemon, Pink, Sky
+    steps: [
+      { target: 1, text: 'Every <b>color</b> needs exactly one Jasper. The <b>green</b> patch has only one square, so Jasper must go there. <b>Double-tap</b> it!' },
+      { info: 'Nice! Jasper now owns his <b>row</b> and <b>column</b>, and no other Jasper can <b>touch</b> him, not even corner to corner. Those squares are crossed out.' },
+      { target: 7, text: 'Look at the <b>yellow</b> patch: only one square is still open. <b>Double-tap</b> it.' },
+      { target: 14, text: 'Now <b>blue</b> has just one open square left. Place Jasper there.' },
+      { target: 8, text: 'Last one! Only one <b>pink</b> square is still open.' },
+      { done: true, text: 'You solved it! In real puzzles, <b>tap once</b> to cross out squares you rule out yourself, and <b>double-tap</b> to place Jasper. A wrong spot costs one of your <b>3 treats</b>, and hints are always free.' },
+    ],
+  };
+  let tut = null;
+  function openTutorial(thenPlay) {
+    tut = { step: 0, state: new Array(16).fill(OPEN), thenPlay, lastTap: null };
+    const b = $('#tut-board');
+    b.style.setProperty('--n', 4);
+    b.innerHTML = '';
+    for (let i = 0; i < 16; i++) {
+      const el = document.createElement('div');
+      el.className = 'cell';
+      el.dataset.t = i;
+      styleCell(el, i, 4, TUT.reg, TUT.colors, 1, 8);
+      b.appendChild(el);
+    }
+    showScreen('tutorial');
+    tutRender();
+  }
+  function tutRender() {
+    const st = TUT.steps[tut.step];
+    const cells = $('#tut-board').children;
+    for (let i = 0; i < 16; i++) {
+      const el = cells[i], v = tut.state[i];
+      el.classList.toggle('h-place', st.target === i);
+      const want = v === JASPER ? 'j' : v === OUT ? 'x' : 'o';
+      if (el._k === want) continue;
+      el._k = want;
+      el.innerHTML = want === 'j' ? '<div class="piece"><img class="jasper-img" alt="Jasper" src="' + jasperSrc + '"></div>' : want === 'x' ? '<div class="mark"></div>' : '';
+    }
+    $('#tut-text').innerHTML = st.text || st.info;
+    $('#tut-dots').innerHTML = TUT.steps.map((_, k) => '<i class="' + (k === tut.step ? 'on' : k < tut.step ? 'past' : '') + '"></i>').join('');
+    $('#tut-next').hidden = !(st.info || st.done);
+    $('#tut-next').textContent = st.done ? (tut.thenPlay ? 'Start Level 1' : 'Done') : 'Next';
+    $('#tut-skip').hidden = !!st.done;
+  }
+  function tutTap(i) {
+    const st = TUT.steps[tut.step];
+    if (st.target === undefined) return;
+    const now = Date.now();
+    const dbl = tut.lastTap && tut.lastTap.i === i && now - tut.lastTap.t < DOUBLE_TAP_MS;
+    tut.lastTap = { i, t: now };
+    const el = $('#tut-board').children[i];
+    if (i !== st.target) { el.classList.remove('nudge'); void el.offsetWidth; el.classList.add('nudge'); return; }
+    if (!dbl) { $('#tut-text').innerHTML = 'Almost! <b>Double-tap</b>: two quick taps on the glowing square.'; sfx('mark'); return; }
+    tut.state[i] = JASPER;
+    sfx('place');
+    // cross out everything this Jasper rules out, one square at a time
+    const ruled = E.attacked(4, TUT.reg, i).filter((k) => tut.state[k] === OPEN);
+    ruled.forEach((k, n) => setTimeout(() => { tut.state[k] = OUT; tutRender(); }, 120 + n * 45));
+    tut.step++;
+    setTimeout(tutRender, 0);
+    if (TUT.steps[tut.step].done) setTimeout(() => sfx('win'), 300);
+  }
+  function tutNext() { if (TUT.steps[tut.step].done) return tutFinish(); tut.step++; tutRender(); }
+  function tutFinish() {
+    save.seenTutorial = true; save.seenHowTo = true; persist();
+    const play = tut && tut.thenPlay;
+    tut = null;
+    if (play) startGame(levelSpec(save.level)); else goHome();
+  }
+  $('#tut-board').addEventListener('pointerup', (e) => {
+    const el = e.target.closest('.cell');
+    if (el && tut) tutTap(+el.dataset.t);
+  });
+
+  // ---------------------------------------------------------------- backup / restore
+  function backupCode() {
+    const data = { v: 1, level: save.level, levels: save.levels, daily: save.daily, stats: save.stats, achievements: save.achievements, settings: save.settings, seenTutorial: true };
+    return 'JDK1-' + btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+  }
+  function backupCopy() {
+    const code = backupCode();
+    const show = (copied) => openModal('<h2>' + (copied ? 'Backup code copied' : 'Your backup code') + '</h2><p>' +
+      (copied ? 'Paste it somewhere safe, like a note or a text to yourself. To restore, open Settings on any phone and tap <b>Restore From Code</b>.' : 'Select and copy this code, then keep it somewhere safe.') +
+      '</p><textarea class="code-box" readonly rows="4">' + code + '</textarea>' + actions([['Done', 'close-modal', 'primary']]));
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(code).then(() => show(true), () => show(false));
+    else show(false);
+  }
+  function backupRestoreAsk() {
+    openModal('<h2>Restore progress</h2><p>Paste a backup code. This <b>replaces</b> the levels, stars, streak and achievements on this phone.</p>' +
+      '<textarea class="code-box" id="restore-code" rows="4" placeholder="JDK1-…"></textarea><p class="restore-err" id="restore-err" hidden></p>' +
+      actions([['Restore', 'backup-do', 'primary'], ['Cancel', 'close-modal', 'ghost']]));
+  }
+  function backupRestoreDo() {
+    const raw = ($('#restore-code').value || '').trim();
+    try {
+      if (!raw.startsWith('JDK1-')) throw new Error('bad');
+      const data = JSON.parse(decodeURIComponent(escape(atob(raw.slice(5)))));
+      if (!data || typeof data.level !== 'number' || !data.levels) throw new Error('bad');
+      const d = defaults();
+      save = Object.assign(d, {
+        level: data.level, levels: data.levels, daily: Object.assign(d.daily, data.daily || {}),
+        stats: Object.assign(d.stats, data.stats || {}), achievements: data.achievements || {},
+        settings: Object.assign(d.settings, data.settings || {}), seenTutorial: true, seenHowTo: true,
+      });
+      persist(); applyTheme(); closeModal(); G = null; goHome(); toast('Progress restored');
+    } catch (err) {
+      const el = $('#restore-err'); el.hidden = false; el.textContent = 'That code doesn\'t look right. Check that the whole code was pasted.';
+    }
+  }
+
+  // ---------------------------------------------------------------- misc UI
+  function showLoading(on) { $('#loading').hidden = !on; }
+  let toastTimer = null;
+  function toast(msg, warn) {
+    let t = $('#toast');
+    if (!t) {
+      t = document.createElement('div');
+      t.id = 'toast';
+      t.style.cssText = 'position:fixed;left:50%;bottom:110px;transform:translateX(-50%);background:#3B2F45;color:#fff;padding:10px 18px;border-radius:99px;font-weight:800;z-index:60;box-shadow:0 6px 20px rgba(0,0,0,.25);transition:opacity .3s;max-width:90%;text-align:center';
+      document.body.appendChild(t);
+    }
+    t.textContent = msg; t.style.opacity = '1';
+    t.style.background = warn ? '#D9485F' : '#3B2F45';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.style.opacity = '0'; }, 2200);
+  }
+
+  // ---------------------------------------------------------------- button wiring
+  document.addEventListener('click', (e) => {
+    const cd = e.target.closest('[data-day]');
+    if (cd && !cd.disabled) return startGame(dailySpec(cd.dataset.day));
+    const lvl = e.target.closest('[data-level]');
+    if (lvl && !lvl.disabled) return startGame(levelSpec(+lvl.dataset.level));
+    const tog = e.target.closest('[data-toggle]');
+    if (tog) {
+      const k = tog.dataset.toggle;
+      save.settings[k] = !save.settings[k];
+      tog.classList.toggle('on', save.settings[k]);
+      persist();
+      if (G) { renderCells(true); renderHeader(); }
+      if (k === 'sound') { openSettings(); if (save.settings.sound) sfx('place'); }
+      return;
+    }
+    const tp = e.target.closest('[data-theme-pick]');
+    if (tp) { save.settings.theme = tp.dataset.themePick; persist(); applyTheme(); document.querySelectorAll('[data-theme-pick]').forEach((b) => b.classList.toggle('on', b === tp)); return; }
+    const fs = e.target.closest('[data-free-size]');
+    if (fs) { save.settings.freeSize = +fs.dataset.freeSize; persist(); return openFreePlay(); }
+    const fd = e.target.closest('[data-free-diff]');
+    if (fd) { save.settings.freeDiff = fd.dataset.freeDiff; persist(); return openFreePlay(); }
+    if (e.target === $('#modal')) return closeModal();
+
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    switch (btn.dataset.action) {
+      case 'continue': if (!save.seenTutorial) return openTutorial(true); return startGame(levelSpec(save.level));
+      case 'tutorial': e.preventDefault(); closeModal(); return openTutorial(false);
+      case 'tut-next': return tutNext();
+      case 'tut-skip': return tutFinish();
+      case 'achievements': return openAchievements();
+      case 'daily-today': return startGame(dailySpec());
+      case 'cal-prev': calMonth.setMonth(calMonth.getMonth() - 1); return renderDaily();
+      case 'cal-next': calMonth.setMonth(calMonth.getMonth() + 1); return renderDaily();
+      case 'backup-copy': return backupCopy();
+      case 'backup-restore': return backupRestoreAsk();
+      case 'backup-do': return backupRestoreDo();
+      case 'daily': return openDaily();
+      case 'free': return openFreePlay();
+      case 'free-start': closeModal(); return startGame(freeSpec());
+      case 'levels': return renderLevels();
+      case 'howto': return openHowTo();
+      case 'settings': return openSettings();
+      case 'home': return goHome();
+      case 'undo': return undo();
+      case 'hint': return showHint();
+      case 'hint-close': return clearHint();
+      case 'hint-apply': return applyHint();
+      case 'restart': return restart();
+      case 'skip': return skip();
+      case 'confirm-skip': return confirmSkip();
+      case 'refill': closeModal(); G.refilled = true; G.lives = MAX_LIVES; renderLives(); saveCurrent(); return toast('Treats refilled!');
+      case 'start-over': closeModal(); G.lives = MAX_LIVES; G.wrongPlaced = 0; G.knownWrong = []; G.history = []; G.state.fill(OPEN); renderCells(); renderLives(); saveCurrent(); return;
+      case 'close-modal': return closeModal();
+      case 'win-next': return winNext();
+      case 'reset-ask':
+        return openModal('<h2>Reset everything?</h2><p>This erases all level progress, stars, and your daily streak on this device. It can\'t be undone.</p>' + actions([['Yes, reset', 'reset-do', 'danger'], ['Cancel', 'close-modal', 'ghost']]));
+      case 'reset-do':
+        save = defaults(); save.seenHowTo = true; persist(); closeModal(); G = null; goHome(); return toast('Progress reset');
+    }
+  });
+
+  document.addEventListener('input', (e) => {
+    const r = e.target.closest && e.target.closest('[data-volume]');
+    if (!r) return;
+    save.settings[r.dataset.volume] = r.value / 100;
+    r.style.setProperty('--pct', r.value + '%');
+    persist();
+  });
+  document.addEventListener('change', (e) => {
+    const r = e.target.closest && e.target.closest('[data-volume]');
+    if (r) sfx(r.dataset.volume === 'winVol' ? 'win' : 'place'); // preview the new level
+  });
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
+    if (e.key === 'Escape') { closeModal(); clearHint(); }
+  });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) saveCurrent(); });
+
+  // ---------------------------------------------------------------- boot
+  // ---------------------------------------------------------------- sounds (made in code, no files)
+  let audio = null;
+  function sfx(kind) {
+    if (!save.settings.sound) return;
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      if (audio.state === 'suspended') audio.resume();
+      const t = audio.currentTime;
+      const level = (kind === 'win' || kind === 'hint') ? save.settings.winVol : save.settings.fxVol;
+      if (!(level > 0)) return;
+      const note = (freq, start, dur, vol, type, slideTo) => {
+        const o = audio.createOscillator(), g = audio.createGain();
+        o.type = type || 'sine';
+        o.frequency.setValueAtTime(freq, t + start);
+        if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + start + dur);
+        g.gain.setValueAtTime(0.0001, t + start);
+        g.gain.exponentialRampToValueAtTime(Math.max(0.0002, vol * level * 1.6), t + start + 0.012);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + start + dur);
+        o.connect(g).connect(audio.destination);
+        o.start(t + start); o.stop(t + start + dur + 0.02);
+      };
+      if (kind === 'mark') note(520, 0, 0.06, 0.05, 'triangle');
+      else if (kind === 'erase') note(380, 0, 0.05, 0.035, 'triangle');
+      else if (kind === 'place') { note(660, 0, 0.09, 0.08); note(990, 0.06, 0.14, 0.07); }
+      else if (kind === 'wrong') { note(220, 0, 0.18, 0.09, 'triangle', 140); note(1800, 0.02, 0.05, 0.03, 'square'); }
+      else if (kind === 'hint') { note(880, 0, 0.12, 0.05); note(1320, 0.08, 0.18, 0.04); }
+      else if (kind === 'win') [523, 659, 784, 1047].forEach((fq, k) => note(fq, k * 0.11, 0.35, 0.07));
+    } catch (e) { /* sound not available - ignore */ }
+  }
+
+  // ---------------------------------------------------------------- light / dark
+  function applyTheme() {
+    const th = save.settings.theme || 'auto';
+    if (th === 'auto') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', th);
+    const dark = th === 'dark' || (th === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+    const meta = document.querySelector('meta[name=theme-color]');
+    if (meta) meta.content = dark ? '#16151B' : '#F3EFF8';
+    document.documentElement.classList.toggle('dark', dark);
+  }
+  if (window.matchMedia) { try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme); } catch (e) { /* old browser */ } }
+
+  applyTheme();
+  paintJasperImages();
+  findJasperPhoto();
+  renderHome();
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+  // expose for debugging/tests
+  window.JasperDoku = { get game() { return G; }, startGame, levelSpec, findHint, save: () => save };
+})();

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <!-- Placeholder for Jasper's face. Replace by adding assets/jasper.jpg -->
+  <circle cx="100" cy="100" r="100" fill="#FFF6EA"/>
+  <path d="M38 92 L44 30 L86 60 Z" fill="#8A8F98"/>
+  <path d="M162 92 L156 30 L114 60 Z" fill="#8A8F98"/>
+  <path d="M50 78 L52 46 L76 62 Z" fill="#F2B8C6"/>
+  <path d="M150 78 L148 46 L124 62 Z" fill="#F2B8C6"/>
+  <ellipse cx="100" cy="112" rx="68" ry="58" fill="#8A8F98"/>
+  <path d="M100 62 L92 84 L100 80 L108 84 Z" fill="#6E737C"/>
+  <ellipse cx="100" cy="134" rx="40" ry="28" fill="#F4F1EC"/>
+  <ellipse cx="74" cy="106" rx="11" ry="13" fill="#2C2A2E"/>
+  <ellipse cx="126" cy="106" rx="11" ry="13" fill="#2C2A2E"/>
+  <circle cx="78" cy="101" r="4" fill="#fff"/>
+  <circle cx="130" cy="101" r="4" fill="#fff"/>
+  <path d="M93 122 L107 122 L100 130 Z" fill="#E58A9E"/>
+  <path d="M100 130 Q92 140 84 136 M100 130 Q108 140 116 136" stroke="#2C2A2E" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <g stroke="#2C2A2E" stroke-width="2" stroke-linecap="round" opacity=".55">
+    <path d="M60 128 L28 122 M60 134 L30 138 M140 128 L172 122 M140 134 L170 138"/>
+  </g>
+</svg>

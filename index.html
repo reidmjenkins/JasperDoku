@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#F3EFF8">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="JasperDoku">
+  <title>JasperDoku</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+
+    <!-- ============ HOME ============ -->
+    <section id="screen-home" class="screen active">
+      <header class="home-top">
+        <span class="home-date" id="home-date"></span>
+        <button class="icon-btn" data-action="settings" aria-label="Settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+        </button>
+      </header>
+
+      <div class="hero">
+        <div class="halo">
+          <span class="orbit o1"></span><span class="orbit o2"></span><span class="orbit o3"></span>
+          <div class="logo-face"><img class="jasper-img" alt="Jasper"></div>
+        </div>
+        <h1>Jasper<span>Doku</span></h1>
+        <p class="tagline">A cozy logic puzzle</p>
+      </div>
+
+      <div class="progress-card">
+        <div class="pc-top">
+          <div class="pc-level">
+            <small>Level</small>
+            <strong id="home-level-num">1</strong>
+          </div>
+          <div class="pc-stats">
+            <div><strong id="home-solved">0</strong><small>solved</small></div>
+            <div><strong id="home-stars">0</strong><small>stars</small></div>
+            <div><strong id="home-size">5 × 5</strong><small>board</small></div>
+          </div>
+        </div>
+        <div class="bar"><span id="home-bar"></span></div>
+        <small class="pc-next" id="home-next"></small>
+      </div>
+
+      <button class="btn primary big play-btn" data-action="continue">
+        <svg viewBox="0 0 24 24"><path d="M8 5.5v13a1 1 0 0 0 1.5.9l10.4-6.5a1 1 0 0 0 0-1.8L9.5 4.6A1 1 0 0 0 8 5.5Z" fill="currentColor"/></svg>
+        <span id="home-level-label">Play Level 1</span>
+      </button>
+
+      <nav class="menu-card">
+        <button class="menu-row" data-action="daily">
+          <span class="mi" style="--c:#FF8E80"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg></span>
+          <span class="ml">Daily Puzzle<small id="home-daily-sub">A fresh 8 × 8 every day</small></span>
+          <span class="chip" title="Daily streak"><svg viewBox="0 0 24 24"><path d="M12 2c1 3.5 5 5.5 5 10.5A5 5 0 0 1 7 12.5c0-2 1-3.5 2-4.5 0 2 1 3 2 3 0-3-1-6 1-9Z" fill="currentColor"/></svg><span id="home-streak">0 days</span></span>
+          <svg class="chev" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="menu-row" data-action="levels">
+          <span class="mi" style="--c:#8CB8F5"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><rect x="4" y="4" width="6.5" height="6.5" rx="1.8"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.8"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.8"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.8"/></svg></span>
+          <span class="ml">All Levels<small>Replay, revisit skipped levels</small></span>
+          <svg class="chev" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="menu-row" data-action="achievements">
+          <span class="mi" style="--c:#FFB938"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v5a4 4 0 0 1-8 0V4ZM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8.5 20h7M10 17h4"/></svg></span>
+          <span class="ml">Achievements<small id="home-ach-sub">Collect them all</small></span>
+          <svg class="chev" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="menu-row" data-action="free">
+          <span class="mi" style="--c:#B79BF2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="4"/><circle cx="9" cy="9" r="1.3" fill="currentColor"/><circle cx="15" cy="15" r="1.3" fill="currentColor"/><circle cx="15" cy="9" r="1.3" fill="currentColor"/><circle cx="9" cy="15" r="1.3" fill="currentColor"/></svg></span>
+          <span class="ml">Free Play<small>Any size, any difficulty</small></span>
+          <svg class="chev" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="menu-row" data-action="howto">
+          <span class="mi" style="--c:#7ECFA0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1.1.9-1.1 1.6v.3"/><circle cx="12" cy="16.8" r=".6" fill="currentColor"/></svg></span>
+          <span class="ml">How to Play<small>Rules &amp; controls</small></span>
+          <svg class="chev" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </nav>
+      <p class="footnote">No ads · Unlimited hints &amp; skips · Progress saved on this device</p>
+    </section>
+
+    <!-- ============ GAME ============ -->
+    <section id="screen-game" class="screen">
+      <header class="game-top glass">
+        <button class="icon-btn" data-action="home" aria-label="Back">
+          <svg viewBox="0 0 24 24"><path d="M15 5 8 12l7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="game-title">
+          <div id="game-title">Level 1</div>
+          <div id="game-sub" class="sub">5 × 5</div>
+        </div>
+        <div class="timer" id="timer">0:00</div>
+      </header>
+
+      <div class="status-row">
+        <div class="lives" id="lives" aria-label="Treats left"></div>
+      </div>
+
+      <div class="rules">
+        <div class="rule"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2" fill="#FF9F94"/><rect x="13" y="3" width="8" height="8" rx="2" fill="#9BDDB0"/><rect x="3" y="13" width="8" height="8" rx="2" fill="#8ECDF7"/><rect x="13" y="13" width="8" height="8" rx="2" fill="#FFDE70"/></svg><span>1 per color</span></div>
+        <div class="rule"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 8h16M4 16h16M8 4v16M16 4v16"/></svg><span>1 per row &amp; column</span></div>
+        <div class="rule"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="7" cy="7" r="3.2"/><circle cx="17" cy="17" r="3.2"/><path d="m15 5 4 4M19 5l-4 4"/></svg><span>No touching</span></div>
+      </div>
+
+      <div class="board-wrap">
+        <div id="board" class="board" role="grid" aria-label="Puzzle board"></div>
+      </div>
+      <p class="controls-tip">Tap&nbsp;=&nbsp;✕ &nbsp;·&nbsp; Double-tap&nbsp;=&nbsp;Jasper &nbsp;·&nbsp; Drag&nbsp;to&nbsp;✕&nbsp;many</p>
+
+      <div class="toolbar glass">
+        <button class="tool" data-action="undo">
+          <svg viewBox="0 0 24 24"><path d="M9 7 4 12l5 5M4.5 12H15a5 5 0 0 1 0 10h-3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Undo</span>
+        </button>
+        <button class="tool" data-action="restart">
+          <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Clear</span>
+        </button>
+        <button class="tool hint" data-action="hint">
+          <svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3Z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Hint</span>
+          <em class="badge">∞</em>
+        </button>
+        <button class="tool" data-action="skip">
+          <svg viewBox="0 0 24 24"><path d="m5 5 7 7-7 7M13 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Skip</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- ============ LEVELS ============ -->
+    <section id="screen-levels" class="screen">
+      <header class="game-top glass">
+        <button class="icon-btn" data-action="home" aria-label="Back">
+          <svg viewBox="0 0 24 24"><path d="M15 5 8 12l7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="game-title"><div>All Levels</div><div class="sub" id="levels-sub">Tap any level to play it</div></div>
+        <div style="width:40px"></div>
+      </header>
+      <div id="level-grid" class="level-grid"></div>
+    </section>
+
+    <!-- ============ SETTINGS ============ -->
+    <section id="screen-settings" class="screen">
+      <header class="home-top">
+        <button class="link-btn back-link" data-action="home" aria-label="Back">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path d="M15 5 8 12l7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Home</span>
+        </button>
+      </header>
+      <h1 class="large-title">Settings</h1>
+      <div id="settings-body"></div>
+      <div style="height:24px"></div>
+    </section>
+
+    <!-- ============ DAILY ============ -->
+    <section id="screen-daily" class="screen">
+      <header class="home-top"><button class="link-btn back-link" data-action="home" aria-label="Back">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path d="M15 5 8 12l7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Home</span>
+        </button></header>
+      <h1 class="large-title">Daily Puzzle</h1>
+      <p class="page-sub">One fresh 8 × 8 puzzle every day. Solve today's to grow your streak.</p>
+      <div class="daily-stats" id="daily-stats"></div>
+      <button class="btn primary big daily-play" id="daily-play" data-action="daily-today"></button>
+      <div class="group cal">
+        <div class="cal-head">
+          <button class="icon-btn" data-action="cal-prev" aria-label="Previous month"><svg viewBox="0 0 24 24"><path d="M15 5 8 12l7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <b id="cal-title"></b>
+          <button class="icon-btn" id="cal-next" data-action="cal-next" aria-label="Next month"><svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        </div>
+        <div class="cal-grid" id="cal-grid"></div>
+      </div>
+      <p class="group-foot">Missed a day? Tap it to catch up. Catch-up days get a checkmark but don't change your streak.</p>
+      <div style="height:20px"></div>
+    </section>
+
+    <!-- ============ ACHIEVEMENTS ============ -->
+    <section id="screen-achievements" class="screen">
+      <header class="home-top"><button class="link-btn back-link" data-action="home" aria-label="Back">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path d="M15 5 8 12l7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Home</span>
+        </button></header>
+      <h1 class="large-title">Achievements</h1>
+      <div id="ach-body"></div>
+      <div style="height:24px"></div>
+    </section>
+
+    <!-- ============ TUTORIAL ============ -->
+    <section id="screen-tutorial" class="screen">
+      <header class="home-top">
+        <span class="home-date">How to play</span>
+        <button class="link-btn" data-action="tut-skip" id="tut-skip">Skip</button>
+      </header>
+      <h1 class="large-title">Meet Jasper</h1>
+      <div class="tut-card">
+        <div class="sheet-face"><img class="jasper-img" alt=""></div>
+        <p id="tut-text"></p>
+      </div>
+      <div class="board-wrap tut-wrap">
+        <div id="tut-board" class="board tut-board" role="grid" aria-label="Tutorial board"></div>
+      </div>
+      <div class="tut-foot">
+        <div class="tut-dots" id="tut-dots"></div>
+        <button class="btn primary big" id="tut-next" data-action="tut-next">Next</button>
+      </div>
+    </section>
+
+    <!-- ============ SHEETS / OVERLAYS ============ -->
+    <div id="hint-sheet" class="sheet" hidden>
+      <div class="sheet-face"><img class="jasper-img" alt=""></div>
+      <p id="hint-text"></p>
+      <div class="sheet-buttons">
+        <button class="btn ghost small" data-action="hint-close">Got it</button>
+        <button class="btn primary small" data-action="hint-apply">Do it for me</button>
+      </div>
+    </div>
+
+    <div id="modal" class="modal" hidden>
+      <div class="modal-card" id="modal-card"></div>
+    </div>
+
+    <div id="win" class="win" hidden>
+      <div class="confetti" id="confetti"></div>
+      <div class="win-card">
+        <div class="win-face"><img class="jasper-img" alt="Jasper"></div>
+        <h2 id="win-title">Jasper approves!</h2>
+        <div class="win-milestone" id="win-milestone" hidden></div>
+        <div class="stars" id="win-stars"></div>
+        <div class="win-stats">
+          <div><span id="win-time">0:00</span><small>time</small></div>
+          <div><span id="win-hints">0</span><small>hints</small></div>
+        </div>
+        <div class="win-badges" id="win-badges"></div>
+        <button class="btn primary big" data-action="win-next" id="win-next">Next level</button>
+        <button class="link-btn" data-action="home">Home</button>
+      </div>
+    </div>
+
+    <div id="loading" class="loading" hidden><div class="spinner"></div><p>Finding a new puzzle…</p></div>
+  </div>
+
+  <script src="js/engine.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
