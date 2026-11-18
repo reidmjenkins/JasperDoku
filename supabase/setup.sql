@@ -65,4 +65,4 @@ grant execute on function public.get_scores(text, timestamptz) to anon;
 grant execute on function public.check_room(text) to anon;
 
 -- Your private family code (keep it secret - don't put it in GitHub):
-insert into public.rooms (code) values ('YOUR-FAMILY-CODE') on conflict do nothing;
+insert into public.rooms (code) values ('YOUR-FAMILY-CODE') on conflict do nothing;  -- keep the 'single quotes'

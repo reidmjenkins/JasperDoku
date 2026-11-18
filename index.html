@@ -169,14 +169,19 @@
 
     <!-- ============ DAILY ============ -->
     <section id="screen-daily" class="screen">
-      <header class="home-top"><button class="link-btn back-link" data-action="home" aria-label="Back">
+      <header class="home-top">
+        <button class="link-btn back-link" data-action="home" aria-label="Back">
           <svg viewBox="0 0 24 24" width="22" height="22"><path d="M15 5 8 12l7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <span>Home</span>
-        </button></header>
-      <h1 class="large-title">Daily Puzzle</h1>
-      <p class="page-sub">One fresh 8 × 8 puzzle every day. Solve today's to grow your streak.</p>
+        </button>
+      </header>
+      <h1 class="large-title">Daily Puzzles</h1>
+      <p class="page-sub">10 new puzzles every day, the same for everyone. Your first try at each one is raced on the leaderboard.</p>
       <div class="daily-stats" id="daily-stats"></div>
+      <div class="group-label daily-day-head"><span id="daily-day-title">Today</span><span id="daily-day-sub"></span></div>
+      <div class="daily-cards" id="daily-cards"></div>
       <button class="btn primary big daily-play" id="daily-play" data-action="daily-today"></button>
+      <div class="group-label">Calendar</div>
       <div class="group cal">
         <div class="cal-head">
           <button class="icon-btn" data-action="cal-prev" aria-label="Previous month"><svg viewBox="0 0 24 24"><path d="M15 5 8 12l7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
@@ -185,7 +190,7 @@
         </div>
         <div class="cal-grid" id="cal-grid"></div>
       </div>
-      <p class="group-foot">Missed a day? Tap it to catch up. Catch-up days get a checkmark but don't change your streak.</p>
+      <p class="group-foot">Tap a day to see its 10 puzzles. Missed days can be caught up, but only today's puzzles grow your streak.</p>
       <div style="height:20px"></div>
     </section>
 

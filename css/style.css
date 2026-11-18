@@ -516,3 +516,39 @@ html:not(.dark) .modal-card { background: rgba(255,255,255,.92); }
 .lb-empty p { color: var(--ink-2); line-height: 1.4; margin: 0 0 16px; }
 .win-rival { display: flex; flex-direction: column; gap: 6px; }
 .rival-row { background: rgba(255,255,255,.14); border-radius: 14px; padding: 8px 14px; font-size: 14px; animation: starIn .5s cubic-bezier(.34,1.56,.64,1) both; }
+
+/* ---------- ten daily puzzles ---------- */
+.daily-day-head { display: flex; justify-content: space-between; align-items: baseline; }
+.daily-day-head #daily-day-title { color: var(--ink); font-size: 20px; font-weight: 700; text-transform: none; letter-spacing: -.02em; }
+.daily-cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.daily-card {
+  position: relative; aspect-ratio: .82; border-radius: 14px; background: var(--card); box-shadow: var(--shadow-1);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 4px;
+}
+.daily-card:active { opacity: .6; }
+.dc-n { font-size: 17px; font-weight: 700; }
+.dc-size { font-size: 11px; color: var(--ink-2); }
+.dc-time { font-size: 11px; font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; }
+.dc-play { font-size: 11px; font-weight: 600; color: var(--accent); min-height: 14px; }
+.dc-play.muted { color: var(--ink-3); }
+.daily-card.done { background: var(--card); box-shadow: inset 0 0 0 2px var(--accent); }
+.daily-card.next { background: var(--accent); color: #fff; }
+.daily-card.next .dc-size, .daily-card.next .dc-play { color: rgba(255,255,255,.9); }
+.dc-rival { position: absolute; top: -6px; right: -6px; display: flex; align-items: center; gap: 2px; font-size: 10px; font-weight: 600; background: var(--card); border-radius: 99px; padding: 1px 6px 1px 1px; box-shadow: 0 1px 4px rgba(0,0,0,.15); color: var(--ink); font-variant-numeric: tabular-nums; }
+.dc-rival .lb-av { width: 16px; height: 16px; font-size: 9px; }
+.cal-day.partial { background: conic-gradient(var(--accent) calc(var(--p) * 1%), var(--fill) 0); color: var(--ink); }
+.cal-day.partial span { background: var(--card); border-radius: 50%; width: 76%; height: 76%; display: grid; place-items: center; }
+.cal-day.selected:not(.solved) { outline: 2px solid var(--ink-3); outline-offset: -2px; }
+.cal-day.solved.selected { outline: 2px solid var(--ink); outline-offset: 1px; }
+
+.lb-day-head { display: flex; align-items: center; justify-content: space-between; text-transform: none; font-size: 15px; color: var(--ink); font-weight: 600; margin-left: 4px; margin-right: 4px; }
+.icon-btn.small { width: 30px; height: 30px; }
+.icon-btn.small svg { width: 16px; height: 16px; }
+.icon-btn:disabled { opacity: .3; }
+.lb-row .label small { color: var(--ink-2); font-size: 12px; margin-left: 2px; }
+.lb-hint { font-style: normal; font-size: 10px; margin-left: 3px; opacity: .8; }
+.lb-day-row { width: 100%; text-align: left; }
+.lb-day-row:active { background: var(--fill); }
+.lb-day-score { display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.lb-day-score .lb-av { width: 22px; height: 22px; font-size: 11px; }
+.lb-day-score i { font-style: normal; color: var(--ink-3); }
