@@ -301,12 +301,24 @@
     saveCurrent();
     checkWin();
   }
+  const isLocked = (i) => G && G.state[i] === JASPER && isSolution(i);
+  function lockedNudge(i) {
+    const el = boardEl.children[i];
+    if (el) { el.classList.remove('nudge'); void el.offsetWidth; el.classList.add('nudge'); }
+    toast('🔒 ' + pieceName() + ' is locked in. Correct spots stay put.');
+  }
   function undo() {
     if (!G || G.done) return;
     if (G.lives <= 0) return outOfTreats();
     const step = G.history.pop();
     if (!step) return toast('Nothing to undo');
-    for (let k = step.length - 1; k >= 0; k--) G.state[step[k].i] = step[k].from;
+    let kept = -1, changed = false;
+    for (let k = step.length - 1; k >= 0; k--) {
+      const c = step[k];
+      if (c.to === JASPER && isSolution(c.i)) { kept = c.i; continue; } // never undo a correct Jasper/Leo
+      G.state[c.i] = c.from; changed = true;
+    }
+    if (!changed && kept >= 0) return lockedNudge(kept);
     afterChange(null);
   }
   /*
@@ -328,6 +340,7 @@
       return;
     }
     const s = G.state[i];
+    if (isLocked(i)) { lastTap = null; return lockedNudge(i); }
     const autoShown = s === OPEN && save.settings.autoX && boardEl.children[i].classList.contains('auto');
     const to = s === JASPER ? OPEN : s === OUT ? OPEN : autoShown ? OPEN : OUT;
     lastTap = { i, t: now, from: s, changed: to !== s };
@@ -675,10 +688,10 @@
   function restart() {
     if (!G || G.done) return;
     const changes = [];
-    G.state.forEach((v, i) => { if (v !== OPEN) changes.push({ i, to: OPEN }); });
-    if (!changes.length) return;
+    G.state.forEach((v, i) => { if (v !== OPEN && !isLocked(i)) changes.push({ i, to: OPEN }); });
+    if (!changes.length) return toast('Nothing to clear. Placed ' + pieceName() + 's stay locked.');
     setCells(changes);
-    toast('Board cleared - tap Undo to bring it back');
+    toast('✕ marks cleared. ' + pieceName() + 's stay locked (Undo brings the marks back)');
   }
 
   // ---------------------------------------------------------------- screens
@@ -759,7 +772,7 @@
       '<div class="howto-step"><div class="num">1</div><p>Put <b>one Jasper</b> in every <b>color patch</b>.</p></div>' +
       '<div class="howto-step"><div class="num">2</div><p>Put <b>one Jasper</b> in every <b>row</b> and every <b>column</b>.</p></div>' +
       '<div class="howto-step"><div class="num">3</div><p>Jaspers <b>never touch</b> each other, not even corner to corner.</p></div>' +
-      '<p><b>Tap</b> a square once to cross it out ✕ (tap again to clear it). <b>Double-tap</b> to place Jasper. Tap Jasper once to take them off. <b>Drag</b> your finger to cross out lots of squares at once.</p>' +
+      '<p><b>Tap</b> a square once to cross it out ✕ (tap again to clear it). <b>Double-tap</b> to place Jasper. Once Jasper is placed in a correct spot, they are <b>locked</b> so they cannot be removed by accident. <b>Drag</b> your finger to cross out lots of squares at once.</p>' +
       '<p>You have <b>3 treats</b>. Put Jasper on a wrong square and a treat breaks. Run out? Start the puzzle over.</p>' +
       '<p>Every 7 to 15 levels there\'s a <b>golden treat level</b> starring <b>Leo</b>: an 8 × 8 board with just <b>one</b> treat.</p>' +
       '<p>Stuck? Hints are free and unlimited. They explain <i>why</i>, and can do the move for you.</p>' +
