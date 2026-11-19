@@ -73,6 +73,12 @@
     }
   })();
   // older saves: first-completion treats become the starting best
+  function migrateChests() {
+    if (save.chestRule === 25) return;
+    const old = save.chests || {}; save.chests = {};
+    for (const [k, v] of Object.entries(old)) save.chests[+k * 2] = v;
+    save.chestRule = 25;
+  }
   function migrateBest() {
     if (!save.best) save.best = {};
     if (!save.chests) save.chests = {};
@@ -866,7 +872,7 @@
     $('#home-ach-sub').textContent = Object.keys(save.achievements).length + ' of ' + ACHIEVEMENTS.length + ' unlocked';
   }
   // ---------------------------------------------------------------- level path & chests
-  const CHEST_EVERY = 50;
+  const CHEST_EVERY = 25;
   const COSMETICS = {
     crown: 'Little crown', bow: 'Pink bow', party: 'Party hat', royal: 'Royal pillow', donut: 'Donut bed', box: 'Cardboard box bed',
     rug: 'Woven rug', shelf: 'Book shelf', feeder: 'Bird feeder', post: 'Scratching post', scratcher: 'Cardboard scratcher',
@@ -875,73 +881,47 @@
   const WINTER_COSMETICS = { santa: 'Santa hat', antlers: 'Reindeer antlers', scarf: 'Cozy scarf', tree: 'Christmas tree', lights: 'String lights', gifts: 'Gift boxes',
     'stock-R': 'Stocking R', 'stock-K': 'Stocking K', 'stock-J': 'Stocking J', 'stock-L': 'Stocking L', 'wall-candy': 'Candy cane wallpaper' };
   const chestReady = (k) => save.level > k * CHEST_EVERY && !save.chests[k];
-  const CHEST_SVG = '<svg viewBox="0 0 64 56" aria-hidden="true"><path d="M6 24h52v26a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4Z" fill="#B8742E"/><path d="M6 24h52v8H6z" fill="#8E5420"/><path d="M8 22c0-10 8-18 18-18h12c10 0 18 8 18 18v2H8Z" fill="#D58A3A"/><path d="M28 4h8v50h-8z" fill="#F2C14E"/><path d="M6 22h52v5H6z" fill="#F2C14E"/><rect x="26" y="20" width="12" height="13" rx="2.5" fill="#FFE08A" stroke="#9A6A10" stroke-width="1.5"/><circle cx="32" cy="26.5" r="2" fill="#9A6A10"/></svg>';
-  const ZONES = {
-    5: { name: 'Living Room', props: ['🧶', '🛋️', '🪴', '🐾', '🧸'] },
-    6: { name: 'Back Garden', props: ['🌷', '🦋', '🌼', '🌿', '🐞'] },
-    7: { name: 'Kitchen', props: ['🐟', '🥛', '🧀', '🍳', '🐟'] },
-    8: { name: 'Cozy Library', props: ['📚', '🕯️', '🪶', '📖', '☕'] },
-    9: { name: 'Rooftop Sunset', props: ['🐦', '☁️', '🌇', '🪁', '☁️'] },
-    10: { name: 'Starry Night', props: ['⭐', '🌙', '✨', '🪐', '⭐'] },
-  };
+  const CHEST_SVG = '<svg viewBox="0 0 72 64" aria-hidden="true">' +
+    // toys peeking out: feather wand, yarn ball, toy mouse
+    '<path d="M18 26 C14 12 10 6 6 2" stroke="#8A5A2B" stroke-width="2.2" fill="none" stroke-linecap="round"/><path d="M6 2c6 2 9 7 8 13-5-2-8-6-8-13Z" fill="#FF7FB0"/><path d="M4 6c5 3 6 8 4 12-3-3-5-7-4-12Z" fill="#7FC4FF"/>' +
+    '<circle cx="47" cy="22" r="9" fill="#E86A5C"/><path d="M39 19c5 3 11 3 16-1M40 25c5 2 10 2 15-2M44 14c-2 5-1 11 2 16" stroke="#B8443A" stroke-width="1.3" fill="none"/>' +
+    '<ellipse cx="29" cy="25" rx="8" ry="5" fill="#A9A3B5"/><circle cx="23" cy="21" r="3" fill="#C9C3D3"/><circle cx="23" cy="21" r="1.6" fill="#F2A9C0"/><circle cx="22" cy="25" r=".9" fill="#222"/>' +
+    // the box: woven basket with a wooden rim and a paw print label
+    '<path d="M8 28h56l-4 30a4 4 0 0 1-4 3.5H16a4 4 0 0 1-4-3.5Z" fill="#C98A4B"/>' +
+    '<path d="M10 36h52M11 44h50M12 52h48" stroke="#A86C33" stroke-width="2"/><path d="M18 29v31M28 29v32M38 29v32M48 29v32M58 29v30" stroke="#B57A3E" stroke-width="1.4" opacity=".7"/>' +
+    '<rect x="6" y="25" width="60" height="7" rx="3.5" fill="#E2A766"/><rect x="6" y="25" width="60" height="3" rx="1.5" fill="#F0C48B"/>' +
+    '<circle cx="36" cy="46" r="8.5" fill="#FFF4E2"/><ellipse cx="36" cy="48.5" rx="3.2" ry="2.6" fill="#C98A4B"/><circle cx="32.2" cy="44.4" r="1.4" fill="#C98A4B"/><circle cx="34.8" cy="42.6" r="1.4" fill="#C98A4B"/><circle cx="37.4" cy="42.6" r="1.4" fill="#C98A4B"/><circle cx="40" cy="44.4" r="1.4" fill="#C98A4B"/>' +
+    '</svg>';
+  // where the five stops sit on one map picture (fractions of its width / height), bottom to top
+  const MAP_STOPS = [[.494, .894], [.443, .628], [.542, .453], [.427, .29], [.494, .114]];
+  const MAP_RATIO = 871 / 900;
   function renderLevels() {
     const wrap = $('#level-grid');
-    wrap.className = 'level-path';
+    wrap.className = 'level-path map';
     showScreen('levels');
-    const PW = wrap.clientWidth || 360;
-    const top = Math.max(60, Math.ceil((save.level + 12) / CHEST_EVERY) * CHEST_EVERY);
-    const stops = [];
-    for (let n = 1; n <= top; n++) { stops.push({ type: 'level', n }); if (n % CHEST_EVERY === 0) stops.push({ type: 'chest', k: n / CHEST_EVERY, n }); }
-    const GAP = 88, H = stops.length * GAP + 90;
-    const pos = (i) => ({ x: 50 + Math.sin(i * .7) * 28, y: H - 60 - i * GAP });
-    const px = (p) => ({ x: p.x / 100 * PW, y: p.y });
+    const PW = wrap.clientWidth || 360, TH = PW * MAP_RATIO, OVER = Math.round(TH * .06);
+    const top = Math.max(50, Math.ceil((save.level + 12) / CHEST_EVERY) * CHEST_EVERY);
+    const tiles = Math.ceil(top / 5), step = TH - OVER, H = tiles * step + OVER;
     let html = '';
-    // a scene behind each run of board sizes
-    let zStart = 0;
-    const sizeAt = (i) => baseSize(stops[i].n);
-    for (let i = 1; i <= stops.length; i++) {
-      if (i < stops.length && sizeAt(i) === sizeAt(zStart)) continue;
-      const size = sizeAt(zStart), z = ZONES[size] || ZONES[10];
-      const yBottom = zStart === 0 ? H : pos(zStart).y + GAP / 2, yTop = i === stops.length ? 0 : pos(i - 1).y - GAP / 2;
-      const top0 = yBottom, hgt = yBottom - yTop;
-      let props = '';
-      for (let k = 0; k < Math.max(2, Math.round(hgt / 120)); k++) {
-        const side = k % 2 ? 'right' : 'left', yy = 30 + ((k * 137) % Math.max(60, hgt - 60)), off = 4 + (k * 7) % 12;
-        props += '<i style="' + side + ':' + off + '%;top:' + yy + 'px;transform:rotate(' + ((k * 23) % 30 - 15) + 'deg)">' + z.props[k % z.props.length] + '</i>';
-      }
-      html += '<div class="lp-band z' + Math.min(size, 10) + '" style="top:' + yTop + 'px;height:' + (top0 - yTop) + 'px">' + props + '<span class="lp-band-name">' + size + ' × ' + size + ' · ' + z.name + '</span></div>';
-      zStart = i;
-    }
-    // the trail: a soft path with paw prints walking along it
-    let d = '';
-    stops.forEach((_, i) => { const p = px(pos(i)); if (!i) d = 'M' + p.x + ' ' + p.y; else { const q = px(pos(i - 1)), my = (p.y + q.y) / 2; d += ' C' + q.x + ' ' + my + ' ' + p.x + ' ' + my + ' ' + p.x + ' ' + p.y; } });
-    html += '<svg class="lp-trail" viewBox="0 0 ' + PW + ' ' + H + '" style="height:' + H + 'px"><path d="' + d + '" class="lp-road"/></svg>';
-    const reachedIdx = stops.findIndex((st) => st.type === 'level' && st.n === save.level);
-    const bez = (a, b, c2, d2, t) => { const u = 1 - t; return u * u * u * a + 3 * u * u * t * b + 3 * u * t * t * c2 + t * t * t * d2; };
-    for (let i = 1; i < stops.length; i++) {
-      const q = px(pos(i - 1)), p = px(pos(i)), my = (p.y + q.y) / 2;
-      [.3, .5, .7].forEach((t, k) => {
-        const x = bez(q.x, q.x, p.x, p.x, t), y = bez(q.y, my, my, p.y, t);
-        const x2 = bez(q.x, q.x, p.x, p.x, t + .02), y2 = bez(q.y, my, my, p.y, t + .02);
-        const ang = Math.atan2(y2 - y, x2 - x) * 180 / Math.PI + 90, side = k % 2 ? 5 : -5;
-        html += '<b class="lp-paw' + (i <= reachedIdx ? ' done' : '') + '" style="left:' + (x + side) + 'px;top:' + y + 'px;transform:translate(-50%,-50%) rotate(' + ang + 'deg)"></b>';
-      });
-    }
-    stops.forEach((st, i) => {
-      const p = pos(i), style = 'left:' + p.x + '%;top:' + p.y + 'px';
-      if (st.type === 'chest') {
-        const opened = save.chests[st.k], ready = chestReady(st.k);
-        html += '<button class="lp-chest' + (ready ? ' ready' : '') + (opened ? ' opened' : '') + '" style="' + style + '" data-chest="' + st.k + '" aria-label="Chest ' + st.k + (opened ? ', opened' : ready ? ', ready to open' : ', locked until level ' + st.k * CHEST_EVERY) + '">' + CHEST_SVG + '<small>' + (opened ? 'Opened' : ready ? 'Open!' : 'Level ' + st.k * CHEST_EVERY) + '</small></button>';
-        return;
-      }
-      const n = st.n, rec = save.levels[n] || {}, locked = n > save.level;
+    // map pictures stacked bottom to top; each one fades softly into the one below
+    for (let t = 0; t < tiles; t++) html += '<img class="lp-map-tile' + (t === tiles - 1 ? ' top' : '') + '" src="assets/path-map.webp" alt="" style="top:' + (H - TH - t * step) + 'px;height:' + TH + 'px">';
+    let lastSize = 0;
+    for (let n = 1; n <= top; n++) {
+      const t = Math.floor((n - 1) / 5), [fx, fy] = MAP_STOPS[(n - 1) % 5];
+      const x = fx * 100, y = H - TH - t * step + fy * TH, style = 'left:' + x + '%;top:' + y + 'px';
+      const rec = save.levels[n] || {}, locked = n > save.level, size = baseSize(n);
+      if (size !== lastSize) { html += '<div class="lp-size" style="top:' + (y + 34) + 'px;' + (fx > .47 ? 'left:6%' : 'right:6%') + '">' + size + ' × ' + size + ' boards</div>'; lastSize = size; }
       const b = save.best['level:' + n], tr = b ? puzzleTreats('level:' + n, b) : 0, maxTr = isGolden(n) ? 12 : 6;
       const cls = 'lp-node' + (isGolden(n) ? ' golden' : '') + (n === save.level ? ' current' : '') + (locked ? ' locked' : '') + (rec.done ? ' done' : '') + (rec.skipped && !rec.done ? ' skipped' : '');
       const stars = rec.done ? '<span class="lp-stars">' + [1, 2, 3].map((k) => '<i class="' + (k <= (rec.stars || 1) ? 'on' : '') + '">★</i>').join('') + '</span>' : '';
       const face = n === save.level ? '<span class="lp-face"><img class="jasper-img" alt="" src="' + (isGolden(n) ? 'assets/leo-full.webp' : jasperFullSrc) + '"></span>' : '';
       const label = (isGolden(n) ? 'Golden level ' : 'Level ') + n + (rec.done ? ', ' + rec.stars + ' stars, ' + tr + ' of ' + maxTr + ' treats' : rec.skipped ? ', skipped' : locked ? ', locked' : '');
       html += '<button class="' + cls + '" style="' + style + '" data-level="' + n + '"' + (locked ? ' disabled' : '') + ' aria-label="' + label + '">' + face + '<b>' + n + '</b>' + stars + (rec.done ? '<span class="lp-treats">' + tr + '/' + maxTr + '</span>' : '') + '</button>';
-    });
+      if (n % CHEST_EVERY === 0) { // toy box on the grass beside every 25th level
+        const k = n / CHEST_EVERY, opened = save.chests[k], ready = chestReady(k), bx = x + 22;
+        html += '<button class="lp-chest' + (ready ? ' ready' : '') + (opened ? ' opened' : '') + '" style="left:' + bx + '%;top:' + (y - 6) + 'px" data-chest="' + k + '" aria-label="Toy box ' + k + (opened ? ', opened' : ready ? ', ready to open' : ', unlocks after level ' + n) + '">' + CHEST_SVG + '<small>' + (opened ? 'Opened' : ready ? 'Open!' : 'Level ' + n) + '</small></button>';
+      }
+    }
     wrap.style.height = H + 'px';
     wrap.innerHTML = html;
     const recs = Object.values(save.levels);
@@ -952,9 +932,9 @@
   function openChest(k) {
     if (save.chests[k]) {
       const r = save.chests[k];
-      return openModal('<div class="chest-open done">' + CHEST_SVG + '</div><h2>Chest ' + k + '</h2><p>You found <b>' + (r.type === 'treats' ? r.amount + ' treats' : r.name) + '</b> in this chest.</p>' + actions([['Nice', 'close-modal', 'primary']]));
+      return openModal('<div class="chest-open done">' + CHEST_SVG + '</div><h2>Chest ' + k + '</h2><p>You found <b>' + (r.type === 'treats' ? r.amount + ' treats' : r.name) + '</b> in this toy box.</p>' + actions([['Nice', 'close-modal', 'primary']]));
     }
-    if (!chestReady(k)) return toast('Finish level ' + k * CHEST_EVERY + ' to open this chest');
+    if (!chestReady(k)) return toast('Finish level ' + k * CHEST_EVERY + ' to open this toy box');
     const pool = Object.assign({}, COSMETICS, holidayOn() ? WINTER_COSMETICS : {});
     const left = Object.keys(pool).filter((id) => !save.room.owned.includes(id));
     let r;
@@ -1796,7 +1776,7 @@
   }
   if (window.matchMedia) { try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme); } catch (e) { /* old browser */ } }
 
-  migrateBest(); persist();
+  migrateBest(); migrateChests(); persist();
   applyTheme();
   applyHoliday();
   lbSync().then((ok) => { if (ok) renderHome(); });
