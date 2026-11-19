@@ -10,8 +10,8 @@
   --card-2: #F2F2F7;                 /* inset fills: segmented control, tracks */
   --fill: rgba(118, 118, 128, .12);  /* iOS tertiary fill */
   --ink: #000000;
-  --ink-2: rgba(60, 60, 67, .62);
-  --ink-3: rgba(60, 60, 67, .32);
+  --ink-2: rgba(60, 60, 67, .78);
+  --ink-3: rgba(60, 60, 67, .48);
   --hair: rgba(60, 60, 67, .16);
   --accent: #2A9D96;
   --accent-2: #23857F;
@@ -19,7 +19,7 @@
   --gold-ink: #5C3B00;
   --danger: #FF3B30;
   --green: #34C759;
-  --board-bg: #FFFFFF;
+  --board-bg: #FAF7F0;                /* soft off-white, easier to look at than pure white */
   --glass: rgba(255, 255, 255, .78);
   --glass-line: rgba(0, 0, 0, .06);
   --overlay: rgba(0, 0, 0, .32);
@@ -40,8 +40,8 @@ html.dark {
   --card-2: #2C2C2E;
   --fill: rgba(118, 118, 128, .24);
   --ink: #FFFFFF;
-  --ink-2: rgba(235, 235, 245, .62);
-  --ink-3: rgba(235, 235, 245, .3);
+  --ink-2: rgba(235, 235, 245, .78);
+  --ink-3: rgba(235, 235, 245, .46);
   --hair: rgba(84, 84, 88, .55);
   --accent: #3CC2BA;
   --accent-2: #2EA8A0;
@@ -167,11 +167,14 @@ svg { display: block; }
 .lives { display: flex; gap: 6px; background: var(--card); padding: 5px 11px; border-radius: 99px; box-shadow: var(--shadow-1); }
 .life { width: 28px; height: 25px; position: relative; display: block; }
 .treat { width: 100%; height: 100%; display: block; }
-.treat path { fill: #EFAE62; stroke: #B06E2C; stroke-width: 2.4; }
-.treat circle { fill: #B06E2C; }
+.treat .tb { fill: #D9964F; stroke: #8E5424; stroke-width: 1.6; }
+.treat .ts { fill: rgba(110, 52, 14, .28); }
+.treat .tc { fill: none; stroke: rgba(120, 62, 22, .55); stroke-width: 1.3; stroke-dasharray: 1.4 1.6; stroke-linecap: round; }
+.treat .th { fill: rgba(255, 238, 205, .5); }
+.treat .tk { fill: rgba(115, 58, 20, .55); }
 .life.gone .treat { opacity: .18; filter: grayscale(1); }
 .life.breaking .treat { animation: lifeBreak .6s ease forwards; }
-.life.breaking .treat path { fill: #FF5A4F; stroke: #A3161F; }
+.life.breaking .treat .tb { fill: #E2574C; stroke: #8E1A1F; }
 @keyframes lifeBreak { 0% { transform: scale(1); } 30% { transform: scale(1.35) rotate(-10deg); } 100% { transform: scale(.6) rotate(20deg); opacity: .18; } }
 
 .rules { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 12px 0; }
@@ -186,19 +189,19 @@ svg { display: block; }
   --n: 5;
   width: min(100%, 62vh); aspect-ratio: 1; display: grid;
   grid-template-columns: repeat(var(--n), 1fr); grid-template-rows: repeat(var(--n), 1fr);
-  background: var(--board-bg); padding: 6px; border-radius: 20px; box-shadow: var(--shadow-2);
+  background: var(--board-bg); padding: 4px; border-radius: 16px; overflow: hidden;
   touch-action: none;
 }
 .cell { position: relative; display: grid; place-items: center; cursor: pointer; overflow: visible; background-clip: padding-box; }
 .cell:active { opacity: .85; }
-.cell .mark { width: 30%; height: 30%; position: relative; opacity: .4; animation: markIn .16s ease-out; }
+.cell .mark { width: 32%; height: 32%; position: relative; opacity: .72; animation: markIn .16s ease-out; }
 .cell .mark::before, .cell .mark::after {
   content: ""; position: absolute; left: 50%; top: 50%; width: 100%; height: 10%; min-height: 2px;
   background: #000; border-radius: 99px; transform: translate(-50%, -50%) rotate(45deg);
 }
 .cell .mark::after { transform: translate(-50%, -50%) rotate(-45deg); }
 @keyframes markIn { from { transform: scale(.5); opacity: 0; } }
-.cell.auto .mark { opacity: .15; animation: none; }
+.cell.auto .mark { opacity: .36; animation: none; }
 .cell .piece {
   position: relative; z-index: 1; overflow: hidden;
   width: 84%; height: 84%; border-radius: 50%; background: var(--piece-ring); padding: 2px;
@@ -219,8 +222,8 @@ svg { display: block; }
 @keyframes redFlash { 0%, 40% { opacity: .9; } 100% { opacity: 0; } }
 .break-fx { position: absolute; inset: 14%; pointer-events: none; z-index: 2; }
 .break-fx .half { position: absolute; inset: 0; width: 100%; height: 100%; }
-.break-fx .half path { fill: #FF5A4F; stroke: #fff; stroke-width: 2.5; }
-.break-fx .half circle { fill: #A3161F; }
+.break-fx .half .tb { fill: #E2574C; stroke: #fff; stroke-width: 2.2; }
+.break-fx .half .tk { fill: rgba(110, 20, 20, .6); }
 .break-fx .left { clip-path: polygon(0 0, 55% 0, 42% 45%, 56% 70%, 45% 100%, 0 100%); animation: crackLeft .9s ease forwards; }
 .break-fx .right { clip-path: polygon(55% 0, 100% 0, 100% 100%, 45% 100%, 56% 70%, 42% 45%); animation: crackRight .9s ease forwards; }
 @keyframes crackLeft { 0% { transform: scale(.4); } 30% { transform: scale(1.1); } 45% { transform: none; } 100% { transform: translate(-30%, 25%) rotate(-35deg); opacity: 0; } }
@@ -559,8 +562,8 @@ html:not(.dark) .modal-card { background: rgba(255,255,255,.92); }
 .piece-img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; pointer-events: none; -webkit-user-drag: none; }
 .has-photo .cell .piece .piece-img { transform: scale(1.06); }
 .life.golden { width: 34px; height: 31px; }
-.life.golden .treat path { fill: #FFC93C; stroke: #B7791F; }
-.life.golden .treat circle { fill: #B7791F; }
+.life.golden .treat .tb { fill: #F4BE3E; stroke: #9C6512; }
+.life.golden .treat .tk { fill: rgba(150, 95, 10, .55); }
 .life.golden:not(.gone) .treat { filter: drop-shadow(0 0 6px rgba(255, 190, 40, .8)); animation: goldPulse 2s ease-in-out infinite; }
 @keyframes goldPulse { 50% { filter: drop-shadow(0 0 12px rgba(255, 190, 40, 1)); } }
 #screen-game.golden .board { box-shadow: 0 0 0 3px #FFC93C, 0 0 28px rgba(255, 185, 40, .45), var(--shadow-2); }
@@ -716,6 +719,7 @@ html.dark .lp-node.locked { background: rgba(40,40,44,.78); color: rgba(255,255,
 .lp-map-tile { position: absolute; left: 0; width: 100%; display: block; pointer-events: none; user-select: none;
   -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 94%, transparent 100%); mask-image: linear-gradient(to bottom, #000 0, #000 94%, transparent 100%); }
 .lp-map-tile:first-child { -webkit-mask-image: none; mask-image: none; }
+.lp-map-cover { position: absolute; display: block; pointer-events: none; user-select: none; }
 .level-path.map .lp-node { width: 54px; height: 54px; border: 3px solid #fff; box-shadow: 0 5px 0 rgba(0,0,0,.28), 0 6px 10px rgba(0,0,0,.25); }
 .level-path.map .lp-node.done { background: radial-gradient(circle at 40% 30%, #4FC7BF, #1F7F79); }
 .level-path.map .lp-node.golden { background: radial-gradient(circle at 40% 30%, #FFE69A, #E8A51F); }
