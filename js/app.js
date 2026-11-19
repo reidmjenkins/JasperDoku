@@ -1897,7 +1897,7 @@
     else document.documentElement.setAttribute('data-theme', th);
     const dark = th === 'dark' || (th === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
     const meta = document.querySelector('meta[name=theme-color]');
-    if (meta) meta.content = dark ? '#16151B' : '#F3EFF8';
+    if (meta) meta.content = dark ? '#241D18' : '#E9DDCA';
     document.documentElement.classList.toggle('dark', dark);
   }
   if (window.matchMedia) { try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme); } catch (e) { /* old browser */ } }

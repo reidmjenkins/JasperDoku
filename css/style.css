@@ -5,7 +5,8 @@
    just a swap of the values below.
    ===================================================================== */
 :root {
-  --bg: #F2F2F7;
+  --bg: #E9DDCA;                     /* light tan behind everything, so the board stands apart */
+  --bg-paws: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'><g transform='translate(38 44) rotate(-18)'><g fill='%23DCCBB0'><ellipse cx='0' cy='6' rx='9' ry='7.5'/><ellipse cx='-10' cy='-5' rx='3.6' ry='4.6' transform='rotate(-20 -10 -5)'/><ellipse cx='-3.6' cy='-10.5' rx='3.6' ry='4.8'/><ellipse cx='3.6' cy='-10.5' rx='3.6' ry='4.8'/><ellipse cx='10' cy='-5' rx='3.6' ry='4.6' transform='rotate(20 10 -5)'/></g></g><g transform='translate(118 112) rotate(22)'><g fill='%23DCCBB0'><ellipse cx='0' cy='6' rx='9' ry='7.5'/><ellipse cx='-10' cy='-5' rx='3.6' ry='4.6' transform='rotate(-20 -10 -5)'/><ellipse cx='-3.6' cy='-10.5' rx='3.6' ry='4.8'/><ellipse cx='3.6' cy='-10.5' rx='3.6' ry='4.8'/><ellipse cx='10' cy='-5' rx='3.6' ry='4.6' transform='rotate(20 10 -5)'/></g></g><g transform='translate(112 30) rotate(8) scale(.7)'><g fill='%23DCCBB0'><ellipse cx='0' cy='6' rx='9' ry='7.5'/><ellipse cx='-10' cy='-5' rx='3.6' ry='4.6' transform='rotate(-20 -10 -5)'/><ellipse cx='-3.6' cy='-10.5' rx='3.6' ry='4.8'/><ellipse cx='3.6' cy='-10.5' rx='3.6' ry='4.8'/><ellipse cx='10' cy='-5' rx='3.6' ry='4.6' transform='rotate(20 10 -5)'/></g></g><g transform='translate(40 130) rotate(-30) scale(.7)'><g fill='%23DCCBB0'><ellipse cx='0' cy='6' rx='9' ry='7.5'/><ellipse cx='-10' cy='-5' rx='3.6' ry='4.6' transform='rotate(-20 -10 -5)'/><ellipse cx='-3.6' cy='-10.5' rx='3.6' ry='4.8'/><ellipse cx='3.6' cy='-10.5' rx='3.6' ry='4.8'/><ellipse cx='10' cy='-5' rx='3.6' ry='4.6' transform='rotate(20 10 -5)'/></g></g></svg>");
   --card: #FFFFFF;
   --card-2: #F2F2F7;                 /* inset fills: segmented control, tracks */
   --fill: rgba(118, 118, 128, .12);  /* iOS tertiary fill */
@@ -35,7 +36,8 @@
   letter-spacing: -.01em;
 }
 html.dark {
-  --bg: #000000;
+  --bg: #241D18;                     /* warm dark brown */
+  --bg-paws: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'><g transform='translate(38 44) rotate(-18)'><g fill='%23352B23'><ellipse cx='0' cy='6' rx='9' ry='7.5'/><ellipse cx='-10' cy='-5' rx='3.6' ry='4.6' transform='rotate(-20 -10 -5)'/><ellipse cx='-3.6' cy='-10.5' rx='3.6' ry='4.8'/><ellipse cx='3.6' cy='-10.5' rx='3.6' ry='4.8'/><ellipse cx='10' cy='-5' rx='3.6' ry='4.6' transform='rotate(20 10 -5)'/></g></g><g transform='translate(118 112) rotate(22)'><g fill='%23352B23'><ellipse cx='0' cy='6' rx='9' ry='7.5'/><ellipse cx='-10' cy='-5' rx='3.6' ry='4.6' transform='rotate(-20 -10 -5)'/><ellipse cx='-3.6' cy='-10.5' rx='3.6' ry='4.8'/><ellipse cx='3.6' cy='-10.5' rx='3.6' ry='4.8'/><ellipse cx='10' cy='-5' rx='3.6' ry='4.6' transform='rotate(20 10 -5)'/></g></g><g transform='translate(112 30) rotate(8) scale(.7)'><g fill='%23352B23'><ellipse cx='0' cy='6' rx='9' ry='7.5'/><ellipse cx='-10' cy='-5' rx='3.6' ry='4.6' transform='rotate(-20 -10 -5)'/><ellipse cx='-3.6' cy='-10.5' rx='3.6' ry='4.8'/><ellipse cx='3.6' cy='-10.5' rx='3.6' ry='4.8'/><ellipse cx='10' cy='-5' rx='3.6' ry='4.6' transform='rotate(20 10 -5)'/></g></g><g transform='translate(40 130) rotate(-30) scale(.7)'><g fill='%23352B23'><ellipse cx='0' cy='6' rx='9' ry='7.5'/><ellipse cx='-10' cy='-5' rx='3.6' ry='4.6' transform='rotate(-20 -10 -5)'/><ellipse cx='-3.6' cy='-10.5' rx='3.6' ry='4.8'/><ellipse cx='3.6' cy='-10.5' rx='3.6' ry='4.8'/><ellipse cx='10' cy='-5' rx='3.6' ry='4.6' transform='rotate(20 10 -5)'/></g></g></svg>");
   --card: #1C1C1E;
   --card-2: #2C2C2E;
   --fill: rgba(118, 118, 128, .24);
@@ -46,7 +48,7 @@ html.dark {
   --accent: #3CC2BA;
   --accent-2: #2EA8A0;
   --gold: #FFC245;
-  --board-bg: #1C1C1E;
+  --board-bg: #141210;
   --glass: rgba(28, 28, 30, .8);
   --glass-line: rgba(255, 255, 255, .06);
   --overlay: rgba(0, 0, 0, .55);
@@ -61,7 +63,7 @@ html.dark {
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; height: 100%; }
-body { background: var(--bg); overscroll-behavior: none; -webkit-user-select: none; user-select: none; transition: background .25s; }
+body { background: var(--bg-paws) 0 0 / 160px 160px, var(--bg); overscroll-behavior: none; -webkit-user-select: none; user-select: none; transition: background .25s; }
 button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; padding: 0; letter-spacing: inherit; }
 [hidden] { display: none !important; }
 svg { display: block; }
@@ -74,7 +76,7 @@ svg { display: block; }
 :root { --pad-top: max(10px, env(safe-area-inset-top)); --pad-bot: max(14px, env(safe-area-inset-bottom)); }
 .screen { display: none; flex-direction: column; min-height: calc(100vh - var(--pad-top) - var(--pad-bot)); min-height: calc(100dvh - var(--pad-top) - var(--pad-bot)); }
 /* the puzzle screen always fits the phone exactly: no page scrolling */
-#screen-game { height: calc(100vh - var(--pad-top) - var(--pad-bot)); height: calc(100dvh - var(--pad-top) - var(--pad-bot)); min-height: 0; overflow: hidden; }
+#screen-game { height: calc(100vh - var(--pad-top) - var(--pad-bot)); height: calc(100dvh - var(--pad-top) - var(--pad-bot)); min-height: 0; }
 html:has(#screen-game.active), html:has(#screen-game.active) body { overflow: hidden; }
 #screen-game .board-wrap { min-height: 0; container-type: size; }
 #screen-game .board { width: min(100cqw, 100cqh); }
