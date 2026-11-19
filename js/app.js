@@ -47,7 +47,7 @@
     level: 1,
     levels: {},
     daily: { streak: 0, last: null, best: 0, done: {}, forfeit: {} },
-    settings: { autoX: false, timer: true, vibrate: true, sound: true, fxVol: 0.7, winVol: 0.8, theme: 'auto', freeSize: 7, freeDiff: 'medium' },
+    settings: { autoX: false, timer: true, vibrate: true, sound: true, fxVol: 0.7, winVol: 0.8, theme: 'auto', holiday: 'auto', freeSize: 7, freeDiff: 'medium' },
     progress: {},
     seenHowTo: false,
     seenTutorial: false,
@@ -55,6 +55,10 @@
     achievements: {},
     lb: { name: '', room: '', rows: [], since: null, pending: [] },
     first: {},
+    best: {},          // 'level:N' / 'daily:ID' -> { t: most treats kept, g: bonus goals reached (bits) }
+    chests: {},        // chest number -> what came out
+    chestTreats: 0,
+    room: { owned: [], spent: 0 },
   });
   let save = load();
   // carry over first-try treats recorded by the previous version (never from a skip)
@@ -68,6 +72,25 @@
       delete r.firstTreats;
     }
   })();
+  // older saves: first-completion treats become the starting best
+  function migrateChests() {
+    if (save.chestRule === 25) return;
+    const old = save.chests || {}; save.chests = {};
+    for (const [k, v] of Object.entries(old)) save.chests[+k * 2] = v;
+    save.chestRule = 25;
+  }
+  function migrateBest() {
+    if (!save.best) save.best = {};
+    if (!save.chests) save.chests = {};
+    if (!save.room) save.room = { owned: [], spent: 0 };
+    if (!save.chestTreats) save.chestTreats = 0;
+    for (const [k, v] of Object.entries(save.first || {})) if (!(k in save.best)) save.best[k] = { t: v, g: 0 };
+    for (const [n, r] of Object.entries(save.levels)) {
+      const k = 'level:' + n;
+      if (r.done && !(k in save.best)) save.best[k] = { t: isGoldenLevelNumber(+n) ? (r.stars === 3 ? 1 : 0) : Math.min(3, r.stars || 0), g: 0 };
+    }
+  }
+  function isGoldenLevelNumber(n) { try { return isGolden(n); } catch (e) { return false; } }
   const firstKey = (spec) => (spec.mode === 'level' ? 'level:' + spec.id : spec.mode === 'daily' ? 'daily:' + spec.id : null);
   // has this puzzle's first completion already happened? (older finished levels count as completed)
   function firstDone(spec) {
@@ -88,6 +111,8 @@
     return defaults();
   }
   function persist() {
+    // the room page reads this to know how many treats there are to spend
+    try { save.jarEarned = treatTotals().total + (save.chestTreats || 0); } catch (e) { /* not ready during start-up */ }
     try { localStorage.setItem(STORE_KEY, JSON.stringify(save)); } catch (e) { /* ignore */ }
   }
 
@@ -120,6 +145,48 @@
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
   function yesterdayStr() { const d = new Date(); d.setDate(d.getDate() - 1); return todayStr(d); }
+  // day number from a 'YYYY-MM-DD' string (used to share streaks on the leaderboard)
+  const dayNum = (ds) => { const [y, m, d] = ds.split('-').map(Number); return Math.round((Date.UTC(y, m - 1, d) - Date.UTC(2026, 0, 1)) / 864e5); };
+  const STREAK_REWARDS = [[3, 5], [7, 15], [14, 30], [30, 60], [60, 100], [100, 150]];
+  function nextStreakReward(n) { return STREAK_REWARDS.find(([d]) => d > n) || null; }
+  function grantStreakReward(n) {
+    const hit = STREAK_REWARDS.find(([d]) => d === n); if (!hit) return 0;
+    const start = (() => { const d = new Date(); d.setDate(d.getDate() - (n - 1)); return todayStr(d); })();
+    save.daily.rewarded = save.daily.rewarded || {};
+    const key = n + '@' + start; if (save.daily.rewarded[key]) return 0;
+    save.daily.rewarded[key] = true; save.chestTreats = (save.chestTreats || 0) + hit[1]; return hit[1];
+  }
+  function streakNow() {
+    const d = save.daily, today = todayStr();
+    const alive = d.last === today || d.last === yesterdayStr();
+    return { n: alive ? d.streak : 0, today: d.last === today, alive, best: d.best || 0 };
+  }
+  // ---- winter holiday look: Auto (Nov 15 – Jan 6), On, or Off
+  function holidayOn() {
+    const h = save.settings.holiday || 'auto';
+    if (h !== 'auto') return h === 'on';
+    const d = new Date(), m = d.getMonth(), day = d.getDate();
+    return m === 11 || (m === 10 && day >= 15) || (m === 0 && day <= 6);
+  }
+  function applyHoliday() {
+    const on = holidayOn();
+    document.body.classList.toggle('holiday', on);
+    const d = new Date(), xmas = d.getMonth() === 11 && (d.getDate() === 24 || d.getDate() === 25);
+    const tag = document.querySelector('.tagline');
+    if (tag) tag.textContent = !on ? 'A cozy logic puzzle' : xmas ? 'Meowy Christmas from Jasper' : 'A cozy winter logic puzzle';
+    const snow = document.getElementById('snow');
+    if (snow && on && !snow.childElementCount) {
+      for (let k = 0; k < 26; k++) {
+        const f = document.createElement('i');
+        f.style.left = (k * 37 % 100) + '%';
+        f.style.setProperty('--sz', (3 + (k * 7) % 5) + 'px');
+        f.style.animationDuration = (9 + (k * 13) % 9) + 's';
+        f.style.animationDelay = -((k * 17) % 14) + 's';
+        f.style.setProperty('--drift', ((k % 2 ? 1 : -1) * (10 + k % 20)) + 'px');
+        snow.appendChild(f);
+      }
+    }
+  }
   // Ten puzzles a day, the same for everyone, getting bigger and trickier.
   const DAILY_LADDER = [
     { size: 5, maxTier: 3, minTier: 0 }, { size: 6, maxTier: 3, minTier: 1 }, { size: 6, maxTier: 4, minTier: 2 },
@@ -282,7 +349,7 @@
   function renderHeader() {
     const s = G.spec;
     $('#game-title').textContent = s.mode === 'level' ? (s.golden ? '✨ Golden Level ' + s.id : 'Level ' + s.id) : s.mode === 'daily' ? 'Daily #' + s.n + (s.day === todayStr() ? '' : ' · ' + shortDate(s.day)) : 'Free Play';
-    const firstNote = G && (s.mode === 'level' || s.mode === 'daily') ? (G.firstRun ? ' · Treats count' : ' · Practice') : '';
+    const firstNote = G && (s.mode === 'level' || s.mode === 'daily') ? ' · Goal ' + goalsFor(s, G.N)[0].label.replace('Under ', '') : '';
     const diffWord = s.golden ? ' · One golden treat' : s.mode === 'level' ? firstNote : s.mode === 'free' ? ' · ' + cap(save.settings.freeDiff) : s.mode === 'daily' ? (G.counts ? ' · Counts for leaderboard' : ' · Practice') : '';
     $('#game-sub').textContent = G.N + ' × ' + G.N + diffWord;
     $('#timer').classList.toggle('hidden-timer', !save.settings.timer);
@@ -601,7 +668,7 @@
     const lost = G.wrongPlaced;
     const stars = lost === 0 ? 3 : lost === 1 ? 2 : 1;
     const spec = G.spec;
-    let milestone = 0;
+    let milestone = 0, streakUp = 0, streakBonus = 0;
     if (spec.mode === 'level') {
       const prev = save.levels[spec.id] || {};
       const nextSize = baseSize(spec.id + 1);
@@ -620,13 +687,17 @@
           save.daily.streak = save.daily.last === yesterdayStr() ? save.daily.streak + 1 : 1;
           save.daily.last = spec.day;
           save.daily.best = Math.max(save.daily.best || 0, save.daily.streak);
+          streakUp = save.daily.streak;
+          streakBonus = grantStreakReward(streakUp);
+          setTimeout(() => lbSync(), 600);
         }
         save.daily.done[spec.id] = { time: G.elapsed, stars, hints: G.hints };
       } else if (G.elapsed < save.daily.done[spec.id].time) {
         save.daily.done[spec.id].time = G.elapsed;
       }
     }
-    { const fk = firstKey(spec); if (fk && G.firstRun && !(fk in save.first)) save.first[fk] = G.lives; }
+    const treats = recordTreats(spec);
+    setTimeout(() => lbSync(), 700);
     const st = save.stats;
     st.wins++;
     if (G.hints === 0 && G.wrongPlaced === 0) st.flawless++;
@@ -642,18 +713,29 @@
     const puzzleKey = spec.mode === 'daily' ? 'daily:' + spec.id : null;
     if (puzzleKey && G.counts) lbQueue(puzzleKey, G.elapsed, G.wrongPlaced, G.hints);
     const myScore = G.elapsed + HINT_PENALTY * G.hints, counted = !!G.counts;
-    setTimeout(() => { showWin(stars, { milestone, unlocked }); if (puzzleKey) lbWinCompare(puzzleKey, myScore, counted); }, 450);
+    setTimeout(() => { showWin(stars, { milestone, unlocked, streakUp, streakBonus, treats }); if (puzzleKey) lbWinCompare(puzzleKey, myScore, counted); }, 450);
   }
 
+  const FLAME = '<svg class="flame" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c1 3.5 5 5.5 5 10.5A5 5 0 0 1 7 12.5c0-2 1-3.5 2-4.5 0 2 1 3 2 3 0-3-1-6 1-9Z" fill="currentColor"/></svg>';
   const WIN_TITLES = ['Jasper approves!', 'Purrfect!', 'Treats for everyone!', 'Nap spot secured!', 'Clever human!'];
   function showWin(stars, info) {
     info = info || {};
     sfx('win');
     const flawless = G.hints === 0 && G.wrongPlaced === 0;
-    $('#win-title').textContent = info.milestone ? 'Level up!' : flawless ? 'Flawless! Purrfect!' : WIN_TITLES[Math.floor(Math.random() * WIN_TITLES.length)];
+    const titles = holidayOn() ? WIN_TITLES.concat(['Meowy Christmas!', 'Snow problem!', 'Fa la la la purr!']) : WIN_TITLES;
+    $('#win-title').textContent = info.milestone ? 'Level up!' : flawless ? 'Flawless! Purrfect!' : titles[Math.floor(Math.random() * titles.length)];
     const ms = $('#win-milestone');
     ms.hidden = !info.milestone;
     if (info.milestone) ms.innerHTML = '<span class="ms-grid" style="--n:' + info.milestone + '"></span><div><b>' + info.milestone + ' × ' + info.milestone + ' boards unlocked</b><small>Bigger boards, trickier puzzles</small></div>';
+    const wsk = $('#win-streak');
+    wsk.hidden = !info.streakUp;
+    if (info.streakUp) { const nx = nextStreakReward(info.streakUp); wsk.innerHTML = FLAME + '<b>' + info.streakUp + '-day streak!</b>' + (info.streakBonus ? '<span class="streak-bonus">' + treatSVG('treat inline-treat') + '+' + info.streakBonus + ' streak reward</span>' : '') + '<small>' + (nx ? (nx[0] - info.streakUp) + ' more day' + (nx[0] - info.streakUp === 1 ? '' : 's') + ' to +' + nx[1] + ' treats' : 'Kept alive for today') + '</small>'; }
+    const wt = $('#win-treats'), tr = info.treats;
+    wt.hidden = !tr;
+    if (tr) {
+      const chip = (got, was, label) => '<span class="wt-goal' + (got || was ? ' got' : '') + (got && !was ? ' new' : '') + '"><i>' + (got || was ? '✓' : '') + '</i>' + label + '</span>';
+      wt.innerHTML = '<div class="wt-head only">' + treatSVG('treat inline-treat') + '<b>' + (tr.gained > 0 ? '+' + tr.gained + ' treat' + (tr.gained === 1 ? '' : 's') : 'No new treats') + '</b></div>';
+    }
     const ub = $('#win-badges');
     $('#win-rival').innerHTML = '';
     ub.innerHTML = (info.unlocked || []).length ? '<small class="wb-label">New achievement' + (info.unlocked.length > 1 ? 's' : '') + '</small><div class="wb-chips">' + info.unlocked.map((a) => '<span class="win-badge"><i>' + a.icon + '</i><b>' + a.name + '</b></span>').join('') + '</div>' : '';
@@ -666,7 +748,7 @@
     $('#win-next').textContent = nextLabel;
     const conf = $('#confetti');
     conf.innerHTML = '';
-    const bits = ['🐾', '✨', '🐟', '💛', '🧶'];
+    const bits = holidayOn() ? ['❄️', '🎄', '🎁', '⭐', '🐾'] : ['🐾', '✨', '🐟', '💛', '🧶'];
     for (let k = 0; k < 36; k++) {
       const s = document.createElement('span');
       s.textContent = bits[k % bits.length];
@@ -722,14 +804,12 @@
   function askStartOver() {
     if (!G || G.done) return;
     const k = firstKey(G.spec);
-    if (!k || !G.firstRun || k in save.first) return doStartOver(); // practice: no penalty, no question
-    openModal('<h2>Are you sure?</h2><p>Starting over counts as finishing <b>' + puzzleTitle() + '</b> with <b>0 treats</b> on the leaderboard. Treats only count on a puzzle\'s first completion.</p>' +
-      actions([['Start over · 0 🍪', 'start-over-yes', 'danger'], ['Cancel', 'start-over-no', 'ghost']]));
+    openModal('<h2>Start over?</h2><p>The board clears and your treats come back. Your best result on <b>' + puzzleTitle() + '</b> is kept.</p>' +
+      actions([['Start over', 'start-over-yes', 'danger'], ['Cancel', 'start-over-no', 'ghost']]));
   }
   function doStartOver(recordZero) {
     closeModal();
     const k = firstKey(G.spec);
-    if (recordZero && k && !(k in save.first)) { save.first[k] = 0; G.firstRun = false; persist(); setTimeout(() => lbSync(), 400); }
     G.restarted = true; G.lives = G.maxLives; G.wrongPlaced = 0; G.knownWrong = []; G.history = []; G.state.fill(OPEN);
     if (G.spec.mode !== 'daily') { G.elapsed = 0; renderTimer(); } // dailies keep their clock so restarts can't help the time race
     clearHint(); renderCells(); renderLives(); renderHeader(); saveCurrent();
@@ -761,6 +841,25 @@
     const streakAlive = save.daily.last === todayStr() || save.daily.last === yesterdayStr();
     const todayCount = dailyDoneCount(todayStr());
     $('#home-streak').textContent = (streakAlive ? save.daily.streak : 0) + ' day' + ((streakAlive ? save.daily.streak : 0) === 1 ? '' : 's');
+    {
+      const sk = streakNow(), card = $('#streak-card');
+      card.classList.toggle('lit', sk.today);
+      card.classList.toggle('waiting', sk.alive && !sk.today);
+      $('#sc-title').textContent = sk.n ? sk.n + '-day streak' : 'Start a streak';
+      const nx = nextStreakReward(sk.n), reward = nx ? ' · day ' + nx[0] + ': +' + nx[1] + ' treats' : '';
+      $('#sc-sub').textContent = sk.today ? 'Done for today' + reward
+        : sk.alive ? 'Play a daily today to keep it' + reward
+        : 'Day 3 of a streak: +5 treats' + (sk.best > 1 ? ' · best ' + sk.best : '');
+      // last 7 days: which ones are part of the current streak
+      let dots = '';
+      const lastN = sk.alive ? dayNum(save.daily.last) : -1e9, firstN = lastN - sk.n + 1;
+      for (let k = 6; k >= 0; k--) {
+        const d = new Date(); d.setDate(d.getDate() - k);
+        const n = dayNum(todayStr(d)), on = n >= firstN && n <= lastN;
+        dots += '<i class="' + (on ? 'on' : '') + (k === 0 ? ' today' : '') + '" title="' + d.toLocaleDateString(undefined, { weekday: 'long' }) + '">' + d.toLocaleDateString(undefined, { weekday: 'narrow' }) + '</i>';
+      }
+      $('#sc-week').innerHTML = dots;
+    }
     $('#home-daily-sub').textContent = todayCount === DAILY_COUNT ? 'All 10 solved today!' : 'Today: ' + todayCount + ' of ' + DAILY_COUNT + ' solved';
     // level progress card
     const recs = Object.values(save.levels);
@@ -783,29 +882,87 @@
     $('#home-size').textContent = size + ' × ' + size;
     $('#home-date').textContent = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
     $('#home-lb-sub').textContent = homeLbSub();
+    { const el = $('#home-room-sub'); if (el) el.textContent = treatJar() + ' treats to spend'; }
     $('#home-ach-sub').textContent = Object.keys(save.achievements).length + ' of ' + ACHIEVEMENTS.length + ' unlocked';
   }
+  // ---------------------------------------------------------------- level path & chests
+  const CHEST_EVERY = 25;
+  const COSMETICS = {
+    crown: 'Little crown', bow: 'Pink bow', party: 'Party hat', post: 'Scratching post', scratcher: 'Cardboard scratcher',
+    yarn: 'Yarn ball', mouse: 'Toy mouse', fire: 'Cozy fire',
+  };
+  const WINTER_COSMETICS = { santa: 'Santa hat', antlers: 'Reindeer antlers', scarf: 'Cozy scarf', tree: 'Christmas tree', lights: 'String lights', gifts: 'Gift boxes',
+    'stock-R': 'Stocking R', 'stock-K': 'Stocking K', 'stock-J': 'Stocking J', 'stock-L': 'Stocking L' };
+  const chestReady = (k) => save.level > k * CHEST_EVERY && !save.chests[k];
+  const CHEST_SVG = '<svg viewBox="0 0 72 64" aria-hidden="true">' +
+    // toys peeking out: feather wand, yarn ball, toy mouse
+    '<path d="M18 26 C14 12 10 6 6 2" stroke="#8A5A2B" stroke-width="2.2" fill="none" stroke-linecap="round"/><path d="M6 2c6 2 9 7 8 13-5-2-8-6-8-13Z" fill="#FF7FB0"/><path d="M4 6c5 3 6 8 4 12-3-3-5-7-4-12Z" fill="#7FC4FF"/>' +
+    '<circle cx="47" cy="22" r="9" fill="#E86A5C"/><path d="M39 19c5 3 11 3 16-1M40 25c5 2 10 2 15-2M44 14c-2 5-1 11 2 16" stroke="#B8443A" stroke-width="1.3" fill="none"/>' +
+    '<ellipse cx="29" cy="25" rx="8" ry="5" fill="#A9A3B5"/><circle cx="23" cy="21" r="3" fill="#C9C3D3"/><circle cx="23" cy="21" r="1.6" fill="#F2A9C0"/><circle cx="22" cy="25" r=".9" fill="#222"/>' +
+    // the box: woven basket with a wooden rim and a paw print label
+    '<path d="M8 28h56l-4 30a4 4 0 0 1-4 3.5H16a4 4 0 0 1-4-3.5Z" fill="#C98A4B"/>' +
+    '<path d="M10 36h52M11 44h50M12 52h48" stroke="#A86C33" stroke-width="2"/><path d="M18 29v31M28 29v32M38 29v32M48 29v32M58 29v30" stroke="#B57A3E" stroke-width="1.4" opacity=".7"/>' +
+    '<rect x="6" y="25" width="60" height="7" rx="3.5" fill="#E2A766"/><rect x="6" y="25" width="60" height="3" rx="1.5" fill="#F0C48B"/>' +
+    '<circle cx="36" cy="46" r="8.5" fill="#FFF4E2"/><ellipse cx="36" cy="48.5" rx="3.2" ry="2.6" fill="#C98A4B"/><circle cx="32.2" cy="44.4" r="1.4" fill="#C98A4B"/><circle cx="34.8" cy="42.6" r="1.4" fill="#C98A4B"/><circle cx="37.4" cy="42.6" r="1.4" fill="#C98A4B"/><circle cx="40" cy="44.4" r="1.4" fill="#C98A4B"/>' +
+    '</svg>';
+  // where the five stops sit on one map picture (fractions of its width / height), bottom to top
+  const MAP_STOPS = [[.494, .894], [.443, .628], [.542, .453], [.427, .29], [.494, .114]];
+  const MAP_RATIO = 871 / 900;
   function renderLevels() {
-    const grid = $('#level-grid');
-    const max = Math.max(30, Math.ceil((save.level + 10) / 5) * 5);
-    let html = '', lastSize = 0;
-    for (let n = 1; n <= max; n++) {
-      const size = baseSize(n);
-      if (size !== lastSize) { html += '<div class="level-size">' + size + ' × ' + size + '</div>'; lastSize = size; }
-      const rec = save.levels[n] || {};
-      const locked = n > save.level;
-      const cls = 'level-tile' + (isGolden(n) ? ' golden' : '') + (n === save.level ? ' current' : '') + (locked ? ' locked' : '') + (rec.skipped && !rec.done ? ' skipped' : '');
-      const starHtml = rec.done ? '<span class="tile-stars">' + [1, 2, 3].map((k) => '<i class="' + (k <= (rec.stars || 1) ? 'on' : '') + '">★</i>').join('') + '</span>' : '';
-      const sub = rec.done ? fmtTime(rec.best || 0) : rec.skipped ? 'Skipped' : n === save.level ? 'Up next' : isGolden(n) ? '✨ Golden' : '';
-      const label = (isGolden(n) ? 'Golden level ' : 'Level ') + n + (rec.done ? ', ' + rec.stars + ' stars, best time ' + fmtTime(rec.best || 0) : rec.skipped ? ', skipped' : locked ? ', locked' : '');
-      html += '<button class="' + cls + (rec.done ? ' done' : '') + '" data-level="' + n + '"' + (locked ? ' disabled' : '') + ' aria-label="' + label + '">' + starHtml + '<b>' + n + '</b><small>' + sub + '</small></button>';
-    }
-    grid.innerHTML = html;
-    const recs = Object.values(save.levels);
-    $('#levels-sub').textContent = recs.filter((r) => r.done).length + ' solved · ' + recs.reduce((t, r) => t + (r.done ? r.stars || 0 : 0), 0) + ' ★';
+    const wrap = $('#level-grid');
+    wrap.className = 'level-path map';
     showScreen('levels');
-    const cur = grid.querySelector('.current');
-    if (cur) cur.scrollIntoView({ block: 'center' });
+    const PW = wrap.clientWidth || 360, TH = PW * MAP_RATIO, OVER = Math.round(TH * .06);
+    const top = Math.max(50, Math.ceil((save.level + 12) / CHEST_EVERY) * CHEST_EVERY);
+    const tiles = Math.ceil(top / 5), step = TH - OVER, H = tiles * step + OVER;
+    let html = '';
+    // map pictures stacked bottom to top; each one fades softly into the one below
+    for (let t = 0; t < tiles; t++) html += '<img class="lp-map-tile' + (t === tiles - 1 ? ' top' : '') + '" src="assets/path-map.webp" alt="" style="top:' + (H - TH - t * step) + 'px;height:' + TH + 'px">';
+    let lastSize = 0;
+    for (let n = 1; n <= top; n++) {
+      const t = Math.floor((n - 1) / 5), [fx, fy] = MAP_STOPS[(n - 1) % 5];
+      const x = fx * 100, y = H - TH - t * step + fy * TH, style = 'left:' + x + '%;top:' + y + 'px';
+      const rec = save.levels[n] || {}, locked = n > save.level, size = baseSize(n);
+      if (size !== lastSize) { html += '<div class="lp-size" style="top:' + (y + 34) + 'px;' + (fx > .47 ? 'left:6%' : 'right:6%') + '">' + size + ' × ' + size + ' boards</div>'; lastSize = size; }
+      const b = save.best['level:' + n], tr = b ? puzzleTreats('level:' + n, b) : 0, maxTr = isGolden(n) ? 12 : 6;
+      const cls = 'lp-node' + (isGolden(n) ? ' golden' : '') + (n === save.level ? ' current' : '') + (locked ? ' locked' : '') + (rec.done ? ' done' : '') + (rec.skipped && !rec.done ? ' skipped' : '');
+      const stars = rec.done ? '<span class="lp-stars">' + [1, 2, 3].map((k) => '<i class="' + (k <= (rec.stars || 1) ? 'on' : '') + '">★</i>').join('') + '</span>' : '';
+      const face = n === save.level ? '<span class="lp-face"><img class="jasper-img" alt="" src="' + (isGolden(n) ? 'assets/leo-full.webp' : jasperFullSrc) + '"></span>' : '';
+      const label = (isGolden(n) ? 'Golden level ' : 'Level ') + n + (rec.done ? ', ' + rec.stars + ' stars, ' + tr + ' of ' + maxTr + ' treats' : rec.skipped ? ', skipped' : locked ? ', locked' : '');
+      if (n % CHEST_EVERY === 0) {
+        const k = n / CHEST_EVERY, opened = save.chests[k], ready = chestReady(k);
+        html += '<button class="lp-toybox' + (ready ? ' ready' : '') + (opened ? ' opened' : '') + (n === save.level ? ' current' : '') + (locked ? ' locked' : '') + '" style="' + style + '"' + (ready ? ' data-chest="' + k + '"' : ' data-level="' + n + '"') + (locked ? ' disabled' : '') + ' aria-label="' + label + (ready ? ', toy box ready to open' : opened ? ', toy box opened' : ', toy box opens when this level is finished') + '">' + CHEST_SVG + stars + '<b>' + n + '</b>' + (ready ? '<small>Open!</small>' : '') + '</button>';
+        continue;
+      }
+      html += '<button class="' + cls + '" style="' + style + '" data-level="' + n + '"' + (locked ? ' disabled' : '') + ' aria-label="' + label + '">' + face + '<b>' + n + '</b>' + stars + (rec.done ? '<span class="lp-treats">' + tr + '/' + maxTr + '</span>' : '') + '</button>';
+      if (false) { // toy box on the grass beside every 25th level
+        const k = n / CHEST_EVERY, opened = save.chests[k], ready = chestReady(k), bx = x + 22;
+        html += '<button class="lp-chest' + (ready ? ' ready' : '') + (opened ? ' opened' : '') + '" style="left:' + bx + '%;top:' + (y - 6) + 'px" data-chest="' + k + '" aria-label="Toy box ' + k + (opened ? ', opened' : ready ? ', ready to open' : ', unlocks after level ' + n) + '">' + CHEST_SVG + '<small>' + (opened ? 'Opened' : ready ? 'Open!' : 'Level ' + n) + '</small></button>';
+      }
+    }
+    wrap.style.height = H + 'px';
+    wrap.innerHTML = html;
+    const recs = Object.values(save.levels);
+    $('#levels-sub').textContent = recs.filter((r) => r.done).length + ' solved · ' + treatTotals().levels + ' treats from levels';
+    const cur = wrap.querySelector('.lp-node.current, .lp-toybox.current') || wrap.querySelector('.lp-toybox.ready');
+    if (cur) setTimeout(() => cur.scrollIntoView({ block: 'center' }), 30);
+  }
+  function openChest(k) {
+    if (save.chests[k]) {
+      const r = save.chests[k];
+      return openModal('<div class="chest-open done">' + CHEST_SVG + '</div><h2>Chest ' + k + '</h2><p>You found <b>' + (r.type === 'treats' ? r.amount + ' treats' : r.name) + '</b> in this toy box.</p>' + actions([['Nice', 'close-modal', 'primary']]));
+    }
+    if (!chestReady(k)) return toast('Finish level ' + k * CHEST_EVERY + ' to open this toy box');
+    const pool = Object.assign({}, COSMETICS, holidayOn() ? WINTER_COSMETICS : {});
+    const left = Object.keys(pool).filter((id) => !save.room.owned.includes(id));
+    let r;
+    if (left.length && Math.random() < .5) { const id = left[Math.floor(Math.random() * left.length)]; r = { type: 'cosmetic', id, name: pool[id] }; save.room.owned.push(id); }
+    else { r = { type: 'treats', amount: 1 + Math.floor(Math.random() * 50) }; save.chestTreats = (save.chestTreats || 0) + r.amount; }
+    r.at = todayStr(); save.chests[k] = r; persist();
+    sfx('win');
+    openModal('<div class="chest-open">' + CHEST_SVG + '<div class="chest-burst"></div></div><h2>' + (r.type === 'treats' ? '+' + r.amount + ' treats!' : r.name + '!') + '</h2><p>' +
+      (r.type === 'treats' ? 'Added to Jasper\'s treat jar for the shop. You have <b>' + treatJar() + '</b> to spend.' : 'A new cosmetic for Jasper. It is waiting in Jasper\'s Room.') + '</p>' + actions([['Yay!', 'close-modal', 'primary']]));
+    renderLevels();
   }
 
   // ---------------------------------------------------------------- modals
@@ -842,6 +999,11 @@
       ['auto', 'light', 'dark'].map((t) => '<button class="choice' + (s.theme === t ? ' on' : '') + '" data-theme-pick="' + t + '">' + cap(t) + '</button>').join('') +
       '</div></div></div>' +
       '<div class="group-foot">Auto matches your phone\'s light or dark setting.</div>' +
+      '<div class="group-label">Winter look</div>' +
+      '<div class="group"><div class="set-row"><div class="choice-grid">' +
+      ['auto', 'on', 'off'].map((t) => '<button class="choice' + ((s.holiday || 'auto') === t ? ' on' : '') + '" data-holiday-pick="' + t + '">' + cap(t) + '</button>').join('') +
+      '</div></div></div>' +
+      '<div class="group-foot">Snow, a Santa hat for Jasper and winter treats. Auto shows it from Nov 15 to Jan 6.</div>' +
 
       '<div class="group-label">Sound</div>' +
       '<div class="group">' + sw('sound', 'Sounds') +
@@ -963,14 +1125,34 @@
     if (fresh.length) { persist(); toast('🏆 Achievement unlocked: ' + fresh.map((a) => a.name).join(', ')); if ($('#screen-home').classList.contains('active')) renderHome(); }
   }
   // Treats saved on first tries. Levels finished before this feature: estimated from stars.
+  // ---------------------------------------------------------------- treats & bonus goals
+  // Each puzzle pays its best run: treats kept (up to 3) + one treat per bonus goal. Golden levels pay double.
+  const GOAL_BITS = [1, 2, 4];
+  function goalsFor(spec, N) {
+    const par = Math.round(N * N * 2.4), fast = Math.round(par / 2);
+    return [
+      { bit: 1, label: 'Under ' + fmtTime(par), test: (g) => g.elapsed <= par },
+      { bit: 2, label: 'Under ' + fmtTime(fast), test: (g) => g.elapsed <= fast },
+      { bit: 4, label: 'No hints', test: (g) => g.hints === 0 },
+    ];
+  }
+  const bitCount = (g) => GOAL_BITS.filter((b) => g & b).length;
+  const bestKey = (spec) => (spec.mode === 'level' ? 'level:' + spec.id : spec.mode === 'daily' ? 'daily:' + spec.id : null);
+  function puzzleTreats(key, rec) { return (rec.t + bitCount(rec.g)) * (key.startsWith('level:') && isGolden(+key.slice(6)) ? 2 : 1); }
   function treatTotals() {
     let levels = 0, dailies = 0;
-    for (const [k, v] of Object.entries(save.first)) { if (k.startsWith('level:')) levels += v; else if (k.startsWith('daily:')) dailies += v; }
-    // levels finished before treats were tracked: estimate from stars
-    for (const [n, r] of Object.entries(save.levels)) {
-      if (r.done && !('level:' + n in save.first)) levels += isGolden(+n) ? (r.stars === 3 ? 1 : 0) : Math.min(3, r.stars || 0);
-    }
+    for (const [k, r] of Object.entries(save.best)) { if (k.startsWith('level:')) levels += puzzleTreats(k, r); else if (k.startsWith('daily:')) dailies += puzzleTreats(k, r); }
     return { levels, dailies, total: levels + dailies };
+  }
+  // treats she can spend in Jasper's Room (spending never lowers the leaderboard number)
+  function treatJar() { return treatTotals().total + (save.chestTreats || 0) - (save.room.spent || 0); }
+  function recordTreats(spec) {
+    const k = bestKey(spec); if (!k) return null;
+    const goals = goalsFor(spec, G.N), bits = goals.reduce((m, g) => m | (g.test(G) ? g.bit : 0), 0);
+    const prev = save.best[k] || { t: 0, g: 0 }, next = { t: Math.max(prev.t, G.lives), g: prev.g | bits };
+    const before = k in save.best ? puzzleTreats(k, prev) : 0, after = puzzleTreats(k, next);
+    save.best[k] = next;
+    return { gained: after - before, total: after, before, bestKept: next.t, bestGoals: bitCount(next.g), lives: G.lives, maxLives: G.maxLives, bits, prevBits: prev.g, goals, golden: !!spec.golden };
   }
   function totalStars() { return Object.values(save.levels).reduce((t, r) => t + (r.done ? r.stars || 0 : 0), 0); }
   function checkAchievements(ctx) {
@@ -1225,12 +1407,19 @@
           save.lb.pending.push({ puzzle: 'progress:treats', time: Math.min(86400, tt.total + 1), mistakes: Math.min(999, tt.levels), hints: Math.min(999, tt.dailies), treatKey });
           persist();
         }
+        const sk = streakNow(), streakKey = save.daily.streak + '/' + (save.daily.best || 0) + '/' + save.daily.last;
+        if (save.daily.last && save.lb.sentStreak !== streakKey) {
+          save.lb.pending = save.lb.pending.filter((p) => p.puzzle !== 'progress:streak');
+          save.lb.pending.push({ puzzle: 'progress:streak', time: Math.min(86400, save.daily.streak + 1), mistakes: Math.min(999, sk.best), hints: ((dayNum(save.daily.last) % 1000) + 1000) % 1000, streakKey });
+          persist();
+        }
         // send anything waiting (works later if the phone was offline)
         while (save.lb.pending.length) {
           const p = save.lb.pending[0];
           await rpc('submit_score', { p_room: save.lb.room, p_player: save.lb.name, p_puzzle: p.puzzle, p_time: p.time, p_mistakes: p.mistakes, p_hints: p.hints });
           if (p.progKey) save.lb.sentProgress = p.progKey;
           if (p.treatKey) save.lb.sentTreats = p.treatKey;
+          if (p.streakKey) save.lb.sentStreak = p.streakKey;
           save.lb.pending.shift(); persist();
         }
         const rows = await rpc('get_scores', { p_room: save.lb.room, p_since: save.lb.since || '1970-01-01T00:00:00Z' });
@@ -1290,6 +1479,18 @@
     }
     // show this phone's own progress immediately, even before it syncs
     if (save.lb.name) out[save.lb.name] = { level: save.level, solved: Object.values(save.levels).filter((r) => r.done).length, stars: totalStars(), at: new Date().toISOString() };
+    return out;
+  }
+  // each player's daily streak (only counts if their last daily was today or yesterday)
+  function lbStreaks() {
+    const out = {}, latest = {};
+    for (const [player, puzzle, t, best, last, at] of save.lb.rows) {
+      if (puzzle !== 'progress:streak') continue;
+      if (!latest[player] || at > latest[player].at) latest[player] = { t, best, last, at };
+    }
+    const tn = ((dayNum(todayStr()) % 1000) + 1000) % 1000, yn = ((dayNum(yesterdayStr()) % 1000) + 1000) % 1000;
+    for (const [p, r] of Object.entries(latest)) out[p] = (r.last === tn || r.last === yn) ? r.t - 1 : 0;
+    if (save.lb.name) out[save.lb.name] = streakNow().n;
     return out;
   }
   function lbTreats() {
@@ -1369,8 +1570,10 @@
       const winVals = Object.fromEntries(two.map((p) => [p, wins[p] || 0]));
       html += scoreCard((p) => wins[p] || 0, (p) => 'puzzles won · ' + (dayWins[p] || 0) + ' days', crownOf(winVals));
       html += '<div class="group-foot center">' + shared + ' daily puzzle' + (shared === 1 ? '' : 's') + ' raced · first completion only · hints add ' + HINT_PENALTY + 's</div>';
+      const stk = lbStreaks();
       html += '<div class="group">' + chipRow('Days won', Object.fromEntries(two.map((p) => [p, dayWins[p] || 0])), (v) => v) +
-        chipRow('Treats saved', pick(tr, (r) => r.dailies), (v) => v + ' 🍪') + '</div>';
+        chipRow('Daily streak', Object.fromEntries(two.filter((p) => stk[p] !== undefined).map((p) => [p, stk[p]])), (v) => v + (v === 1 ? ' day' : ' days')) +
+        chipRow('Treats earned', pick(tr, (r) => r.dailies), (v) => v + ' ' + treatSVG('treat inline-treat')) + '</div>';
       // one day, puzzle by puzzle
       const dr = dayResult(lbDay, best);
       const dayTitle = lbDay === todayStr() ? 'Today' : shortDate(lbDay);
@@ -1401,7 +1604,7 @@
       const lvVals = pick(lv, (r) => r.level);
       html += scoreCard((p) => (lv[p] ? lv[p].level : '–'), (p) => (lv[p] ? 'current level · ' + baseSize(lv[p].level) + '×' + baseSize(lv[p].level) : 'not shared yet'), crownOf(lvVals));
       html += '<div class="group">' +
-        chipRow('Treats saved', pick(tr, (r) => r.levels), (v) => v + ' 🍪') +
+        chipRow('Treats earned', pick(tr, (r) => r.levels), (v) => v + ' ' + treatSVG('treat inline-treat')) +
         chipRow('Levels solved', pick(lv, (r) => r.solved), (v) => v) +
         chipRow('Stars', pick(lv, (r) => r.stars), (v) => v + ' ★') + '</div>';
     }
@@ -1453,6 +1656,7 @@
 
   // ---------------------------------------------------------------- button wiring
   document.addEventListener('click', (e) => {
+    { const d = document.getElementById('drop'); if (d && !d.hidden && !e.target.closest('.menu-wrap')) d.hidden = true; }
     const cd = e.target.closest('[data-day]');
     if (cd && !cd.disabled) { dailyDay = cd.dataset.day; return renderDaily(); }
     const lt = e.target.closest('[data-lb-tab]');
@@ -1473,6 +1677,10 @@
       if (k === 'sound') { openSettings(); if (save.settings.sound) sfx('place'); }
       return;
     }
+    const hp = e.target.closest('[data-holiday-pick]');
+    if (hp) { save.settings.holiday = hp.dataset.holidayPick; persist(); applyHoliday(); document.querySelectorAll('[data-holiday-pick]').forEach((b) => b.classList.toggle('on', b === hp)); return; }
+    const ch = e.target.closest('[data-chest]');
+    if (ch) { openChest(+ch.dataset.chest); return; }
     const tp = e.target.closest('[data-theme-pick]');
     if (tp) { save.settings.theme = tp.dataset.themePick; persist(); applyTheme(); document.querySelectorAll('[data-theme-pick]').forEach((b) => b.classList.toggle('on', b === tp)); return; }
     const fs = e.target.closest('[data-free-size]');
@@ -1488,7 +1696,7 @@
       case 'tutorial': e.preventDefault(); closeModal(); return openTutorial(false);
       case 'tut-next': return tutNext();
       case 'tut-skip': return tutFinish();
-      case 'achievements': return openAchievements();
+      case 'achievements': $('#drop').hidden = true; return openAchievements();
       case 'daily-today': { const nd = nextDailyN(dailyDay); return nd ? startGame(dailySpec(dailyDay, nd)) : undefined; }
       case 'cal-prev': calMonth.setMonth(calMonth.getMonth() - 1); return renderDaily();
       case 'cal-next': calMonth.setMonth(calMonth.getMonth() + 1); return renderDaily();
@@ -1501,11 +1709,13 @@
       case 'lb-day-next': { const d = new Date(lbDay + 'T12:00'); d.setDate(d.getDate() + 1); lbDay = todayStr(d) > todayStr() ? todayStr() : todayStr(d); return renderLeaderboard(); }
       case 'lb-refresh': return lbSync(true).then(renderLeaderboard);
       case 'daily': return openDaily();
+      case 'room': persist(); location.href = 'room.html'; return;
       case 'free': return openFreePlay();
       case 'free-start': closeModal(); return startGame(freeSpec());
       case 'levels': return renderLevels();
-      case 'howto': return openHowTo();
-      case 'settings': return openSettings();
+      case 'howto': $('#drop').hidden = true; return openHowTo();
+      case 'menu': { const d = $('#drop'), open = d.hidden; d.hidden = !open; $('#menu-btn').setAttribute('aria-expanded', open); return; }
+      case 'settings': $('#drop').hidden = true; return openSettings();
       case 'home': return goHome();
       case 'undo': return undo();
       case 'hint': return showHint();
@@ -1587,7 +1797,9 @@
   }
   if (window.matchMedia) { try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme); } catch (e) { /* old browser */ } }
 
+  migrateBest(); migrateChests(); persist();
   applyTheme();
+  applyHoliday();
   lbSync().then((ok) => { if (ok) renderHome(); });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) lbSync().then((ok) => { if (ok && $('#screen-home').classList.contains('active')) renderHome(); }); });
   paintJasperImages();
