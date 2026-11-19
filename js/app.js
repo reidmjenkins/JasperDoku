@@ -916,8 +916,13 @@
       const stars = rec.done ? '<span class="lp-stars">' + [1, 2, 3].map((k) => '<i class="' + (k <= (rec.stars || 1) ? 'on' : '') + '">★</i>').join('') + '</span>' : '';
       const face = n === save.level ? '<span class="lp-face"><img class="jasper-img" alt="" src="' + (isGolden(n) ? 'assets/leo-full.webp' : jasperFullSrc) + '"></span>' : '';
       const label = (isGolden(n) ? 'Golden level ' : 'Level ') + n + (rec.done ? ', ' + rec.stars + ' stars, ' + tr + ' of ' + maxTr + ' treats' : rec.skipped ? ', skipped' : locked ? ', locked' : '');
+      if (n % CHEST_EVERY === 0) {
+        const k = n / CHEST_EVERY, opened = save.chests[k], ready = chestReady(k);
+        html += '<button class="lp-toybox' + (ready ? ' ready' : '') + (opened ? ' opened' : '') + (n === save.level ? ' current' : '') + (locked ? ' locked' : '') + '" style="' + style + '"' + (ready ? ' data-chest="' + k + '"' : ' data-level="' + n + '"') + (locked ? ' disabled' : '') + ' aria-label="' + label + (ready ? ', toy box ready to open' : opened ? ', toy box opened' : ', toy box opens when this level is finished') + '">' + CHEST_SVG + stars + '<b>' + n + '</b>' + (ready ? '<small>Open!</small>' : '') + '</button>';
+        continue;
+      }
       html += '<button class="' + cls + '" style="' + style + '" data-level="' + n + '"' + (locked ? ' disabled' : '') + ' aria-label="' + label + '">' + face + '<b>' + n + '</b>' + stars + (rec.done ? '<span class="lp-treats">' + tr + '/' + maxTr + '</span>' : '') + '</button>';
-      if (n % CHEST_EVERY === 0) { // toy box on the grass beside every 25th level
+      if (false) { // toy box on the grass beside every 25th level
         const k = n / CHEST_EVERY, opened = save.chests[k], ready = chestReady(k), bx = x + 22;
         html += '<button class="lp-chest' + (ready ? ' ready' : '') + (opened ? ' opened' : '') + '" style="left:' + bx + '%;top:' + (y - 6) + 'px" data-chest="' + k + '" aria-label="Toy box ' + k + (opened ? ', opened' : ready ? ', ready to open' : ', unlocks after level ' + n) + '">' + CHEST_SVG + '<small>' + (opened ? 'Opened' : ready ? 'Open!' : 'Level ' + n) + '</small></button>';
       }
@@ -926,7 +931,7 @@
     wrap.innerHTML = html;
     const recs = Object.values(save.levels);
     $('#levels-sub').textContent = recs.filter((r) => r.done).length + ' solved · ' + treatTotals().levels + ' treats from levels';
-    const cur = wrap.querySelector('.lp-node.current') || wrap.querySelector('.lp-chest.ready');
+    const cur = wrap.querySelector('.lp-node.current, .lp-toybox.current') || wrap.querySelector('.lp-toybox.ready');
     if (cur) setTimeout(() => cur.scrollIntoView({ block: 'center' }), 30);
   }
   function openChest(k) {
