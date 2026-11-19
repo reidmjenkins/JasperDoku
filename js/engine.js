@@ -310,13 +310,13 @@
   function logicSolve(N, reg, maxTier, startState) {
     const units = buildUnits(N, reg);
     const state = startState ? startState.slice() : new Array(N * N).fill(OPEN);
-    let hardest = 0, steps = 0;
+    let hardest = 0, steps = 0, hard = 0;
     for (let guard = 0; guard < 2000; guard++) {
-      if (state.filter((s) => s === JASPER).length === N) return { solved: true, hardest, steps, state };
+      if (state.filter((s) => s === JASPER).length === N) return { solved: true, hardest, steps, hard, state };
       const st = nextStep(N, reg, state, maxTier, units);
-      if (!st || st.tier < 0) return { solved: false, hardest, steps, state };
+      if (!st || st.tier < 0) return { solved: false, hardest, steps, hard, state };
       hardest = Math.max(hardest, st.tier);
-      steps++;
+      steps++; if (st.tier >= 3) hard++;
       applyStep(state, st);
     }
     return { solved: false, hardest, steps, state };
@@ -324,7 +324,8 @@
 
   /*
    * Make a puzzle.
-   * opts: { size, seed (string or number), maxTier (1-4), minTier (optional) }
+   * opts: { size, seed (string or number), maxTier (1-4), minTier (optional),
+   *         pick (optional: make this many good puzzles and keep the one with the most hard steps) }
    * Returns { size, regions, solution (col per row), hardest, seed }
    */
   function generate(opts) {
@@ -333,7 +334,8 @@
     const minTier = opts.minTier || 0;
     const seedNum = typeof opts.seed === 'number' ? opts.seed : hashSeed(String(opts.seed || Math.random()));
     const rng = mulberry32(seedNum);
-    let fallback = null;
+    const pick = opts.pick || 1;
+    let fallback = null, best = null, found = 0;
     for (let attempt = 0; attempt < 400; attempt++) {
       const queens = randomQueens(N, rng);
       if (!queens) continue;
@@ -341,12 +343,17 @@
       if (!makeUnique(N, reg, queens, rng)) continue;
       const res = logicSolve(N, reg, maxTier);
       if (!res.solved) continue;
-      const puzzle = { size: N, regions: reg, solution: queens, hardest: res.hardest, seed: seedNum };
-      if (res.hardest >= minTier) return puzzle;
+      const puzzle = { size: N, regions: reg, solution: queens, hardest: res.hardest, hardSteps: res.hard, seed: seedNum };
+      if (res.hardest >= minTier) {
+        if (pick <= 1) return puzzle;
+        if (!best || res.hard > best.hardSteps) best = puzzle;
+        if (++found >= pick) return best;
+        continue;
+      }
       if (!fallback) fallback = puzzle;
-      if (attempt > 60 && fallback) return fallback;
+      if (attempt > 60 && (best || fallback)) return best || fallback;
     }
-    if (fallback) return fallback;
+    if (best || fallback) return best || fallback;
     throw new Error('Could not generate a puzzle');
   }
 
