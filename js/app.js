@@ -5,17 +5,19 @@
   const { OPEN, OUT, JASPER } = E;
 
   // ---------------------------------------------------------------- colors
+  // Paul Tol's "Light" colour scheme (made for coloured cells with marks on top; colour-blind safe),
+  // plus a soft lavender as the 10th colour for 10 x 10 boards
   const PALETTE = [
-    { name: 'Coral', hex: '#FF9F94' },
-    { name: 'Tangerine', hex: '#FFBE6B' },
-    { name: 'Lemon', hex: '#FFDE70' },
-    { name: 'Mint', hex: '#9BDDB0' },
-    { name: 'Lime', hex: '#CFE584' },
-    { name: 'Sky', hex: '#8ECDF7' },
-    { name: 'Slate', hex: '#B4BFCD' },
-    { name: 'Lavender', hex: '#C3A9F5' },
-    { name: 'Pink', hex: '#F9AFCF' },
-    { name: 'Latte', hex: '#D2B394' },
+    { name: 'Blue', hex: '#77AADD' },
+    { name: 'Orange', hex: '#EE8866' },
+    { name: 'Yellow', hex: '#EEDD88' },
+    { name: 'Mint', hex: '#44BB99' },
+    { name: 'Pink', hex: '#FFAABB' },
+    { name: 'Sky', hex: '#99DDFF' },
+    { name: 'Pear', hex: '#BBCC33' },
+    { name: 'Grey', hex: '#DDDDDD' },
+    { name: 'Olive', hex: '#AAAA00' },
+    { name: 'Lavender', hex: '#C9B3EA' },
   ];
 
   // ---------------------------------------------------------------- Jasper's face
@@ -286,8 +288,8 @@
     boardEl.style.setProperty('--n', N);
     boardEl.innerHTML = '';
     const inner = N >= 9 ? 0.75 : 1;          // half the small gap between every square
-    const gap = inner;                        // same gap between patches - color tells them apart
-    const tight = N >= 9 ? 4 : N >= 7 ? 5 : 6; // corner rounding on every square
+    const gap = 0;                            // patches touch: only their colors set them apart
+    const tight = 0;                          // square corners so touching patches meet cleanly
     for (let i = 0; i < N * N; i++) {
       const r = (i / N) | 0, c = i % N;
       const el = document.createElement('div');
@@ -349,8 +351,7 @@
   function renderHeader() {
     const s = G.spec;
     $('#game-title').textContent = s.mode === 'level' ? (s.golden ? '✨ Golden Level ' + s.id : 'Level ' + s.id) : s.mode === 'daily' ? 'Daily #' + s.n + (s.day === todayStr() ? '' : ' · ' + shortDate(s.day)) : 'Free Play';
-    const firstNote = G && (s.mode === 'level' || s.mode === 'daily') ? ' · Goal ' + goalsFor(s, G.N)[0].label.replace('Under ', '') : '';
-    const diffWord = s.golden ? ' · One golden treat' : s.mode === 'level' ? firstNote : s.mode === 'free' ? ' · ' + cap(save.settings.freeDiff) : s.mode === 'daily' ? (G.counts ? ' · Counts for leaderboard' : ' · Practice') : '';
+    const diffWord = s.golden ? ' · One golden treat' : s.mode === 'free' ? ' · ' + cap(save.settings.freeDiff) : s.mode === 'daily' ? (G.counts ? ' · Counts for leaderboard' : ' · Practice') : '';
     $('#game-sub').textContent = G.N + ' × ' + G.N + diffWord;
     $('#timer').classList.toggle('hidden-timer', !save.settings.timer);
     renderTimer();
@@ -442,8 +443,15 @@
   }
 
   // ---------------------------------------------------------------- lives (treats)
+  // a baked, pillow-shaped cat treat: crimped seams, soft shading and a few toasted specks
   function treatSVG(cls) {
-    return '<svg class="' + cls + '" viewBox="0 0 40 36" aria-hidden="true"><path d="M20 33.5C8.5 26 2.5 19.5 2.5 11.5a8.7 8.7 0 0 1 17.5-3.3 8.7 8.7 0 0 1 17.5 3.3C37.5 19.5 31.5 26 20 33.5Z"/><circle cx="13" cy="13" r="1.8"/><circle cx="27" cy="13" r="1.8"/><circle cx="20" cy="20" r="1.8"/></svg>';
+    return '<svg class="' + cls + '" viewBox="0 0 40 36" aria-hidden="true">' +
+      '<path class="tb" d="M7.5 8.6C11 5.2 29 5.2 32.5 8.6c3.6 3.9 3.6 14.9 0 18.8-3.5 3.4-21.5 3.4-25 0-3.6-3.9-3.6-14.9 0-18.8Z"/>' +
+      '<path class="ts" d="M4.9 19.2c.3 3.7 1.2 6.6 2.6 8.2 3.5 3.4 21.5 3.4 25 0 1.4-1.6 2.3-4.5 2.6-8.2-1.1 4.6-3 6.9-5.4 7.7-4.8 1.6-14.6 1.6-19.4 0-2.4-.8-4.3-3.1-5.4-7.7Z"/>' +
+      '<path class="tc" d="M10 11.2c5-1.6 15-1.6 20 0M10 24.8c5 1.6 15 1.6 20 0"/>' +
+      '<ellipse class="th" cx="15.5" cy="13.6" rx="6.5" ry="2.4" transform="rotate(-8 15.5 13.6)"/>' +
+      '<circle class="tk" cx="24.5" cy="16.5" r=".9"/><circle class="tk" cx="13" cy="20.5" r=".8"/><circle class="tk" cx="21" cy="21.8" r=".7"/><circle class="tk" cx="28" cy="21" r=".7"/>' +
+      '</svg>';
   }
   function renderLives() {
     if (!G) return;
@@ -908,6 +916,19 @@
   // where the five stops sit on one map picture (fractions of its width / height), bottom to top
   const MAP_STOPS = [[.494, .894], [.443, .628], [.542, .453], [.427, .29], [.494, .114]];
   const MAP_RATIO = 871 / 900;
+  // cover-ups for houses on the map picture: [x, y, width, height] in the 900 x 871 picture
+  const MAP_COVERS = { tl: [50, 0, 357, 316], ml: [10, 270, 440, 300], mr: [504, 192, 215, 272], br: [566, 487, 334, 384] };
+  // which houses are hidden on map section t (levels 5t+1 to 5t+5):
+  // the two middle houses take turns, and every third section also loses the top-left
+  // and/or bottom-right house (picked from a fixed seed, so it never changes between visits)
+  function mapHidden(t) {
+    const out = [t % 2 === 0 ? 'ml' : 'mr'];
+    if (t % 3 === 2) {
+      const r = E.mulberry32(E.hashSeed('map-section-' + t))();
+      if (r < 1 / 3) out.push('tl'); else if (r < 2 / 3) out.push('br'); else out.push('tl', 'br');
+    }
+    return out;
+  }
   function renderLevels() {
     const wrap = $('#level-grid');
     wrap.className = 'level-path map';
@@ -917,14 +938,22 @@
     const tiles = Math.ceil(top / 5), step = TH - OVER, H = tiles * step + OVER;
     let html = '';
     // map pictures stacked bottom to top; each one fades softly into the one below
-    for (let t = 0; t < tiles; t++) html += '<img class="lp-map-tile' + (t === tiles - 1 ? ' top' : '') + '" src="assets/path-map.webp" alt="" style="top:' + (H - TH - t * step) + 'px;height:' + TH + 'px">';
+    for (let t = 0; t < tiles; t++) {
+      const tileTop = H - TH - t * step;
+      html += '<img class="lp-map-tile' + (t === tiles - 1 ? ' top' : '') + '" src="assets/path-map.webp" alt="" style="top:' + tileTop + 'px;height:' + TH + 'px">';
+      // trees and lawn painted over some houses so each stretch of five levels looks a little different
+      for (const k of mapHidden(t)) {
+        const [x, y, w, h] = MAP_COVERS[k];
+        html += '<img class="lp-map-cover" src="assets/map-cover-' + k + '.webp" alt="" style="left:' + (x / 9) + '%;width:' + (w / 9) + '%;top:' + (tileTop + y / 871 * TH) + 'px;height:' + (h / 871 * TH) + 'px">';
+      }
+    }
     let lastSize = 0;
     for (let n = 1; n <= top; n++) {
       const t = Math.floor((n - 1) / 5), [fx, fy] = MAP_STOPS[(n - 1) % 5];
       const x = fx * 100, y = H - TH - t * step + fy * TH, style = 'left:' + x + '%;top:' + y + 'px';
       const rec = save.levels[n] || {}, locked = n > save.level, size = baseSize(n);
       if (size !== lastSize) { html += '<div class="lp-size" style="top:' + (y + 34) + 'px;' + (fx > .47 ? 'left:6%' : 'right:6%') + '">' + size + ' × ' + size + ' boards</div>'; lastSize = size; }
-      const b = save.best['level:' + n], tr = b ? puzzleTreats('level:' + n, b) : 0, maxTr = isGolden(n) ? 12 : 6;
+      const b = save.best['level:' + n], tr = b ? puzzleTreats('level:' + n, b) : 0, maxTr = isGolden(n) ? GOLD_FIRST : 3;
       const cls = 'lp-node' + (isGolden(n) ? ' golden' : '') + (n === save.level ? ' current' : '') + (locked ? ' locked' : '') + (rec.done ? ' done' : '') + (rec.skipped && !rec.done ? ' skipped' : '');
       const stars = rec.done ? '<span class="lp-stars">' + [1, 2, 3].map((k) => '<i class="' + (k <= (rec.stars || 1) ? 'on' : '') + '">★</i>').join('') + '</span>' : '';
       const face = n === save.level ? '<span class="lp-face"><img class="jasper-img" alt="" src="' + (isGolden(n) ? 'assets/leo-full.webp' : jasperFullSrc) + '"></span>' : '';
@@ -1126,7 +1155,9 @@
   }
   // Treats saved on first tries. Levels finished before this feature: estimated from stars.
   // ---------------------------------------------------------------- treats & bonus goals
-  // Each puzzle pays its best run: treats kept (up to 3) + one treat per bonus goal. Golden levels pay double.
+  // Each puzzle pays the treats left at the end of its best run: 3 left = 3 treats, 2 = 2, 1 = 1.
+  // Golden levels pay 5 when won on the very first try, 3 after any start-over or on a replay.
+  // (Old saves also stored bonus-goal bits in .g; those no longer pay anything.)
   const GOAL_BITS = [1, 2, 4];
   function goalsFor(spec, N) {
     const par = Math.round(N * N * 2.4), fast = Math.round(par / 2);
@@ -1138,7 +1169,13 @@
   }
   const bitCount = (g) => GOAL_BITS.filter((b) => g & b).length;
   const bestKey = (spec) => (spec.mode === 'level' ? 'level:' + spec.id : spec.mode === 'daily' ? 'daily:' + spec.id : null);
-  function puzzleTreats(key, rec) { return (rec.t + bitCount(rec.g)) * (key.startsWith('level:') && isGolden(+key.slice(6)) ? 2 : 1); }
+  const GOLD_FIRST = 5, GOLD_LATER = 3;
+  function puzzleTreats(key, rec) {
+    const t = rec.t || 0;
+    // golden wins saved before this rule stored 1; count them as a later-try win
+    if (t > 0 && t < GOLD_LATER && key.startsWith('level:') && isGolden(+key.slice(6))) return GOLD_LATER;
+    return t;
+  }
   function treatTotals() {
     let levels = 0, dailies = 0;
     for (const [k, r] of Object.entries(save.best)) { if (k.startsWith('level:')) levels += puzzleTreats(k, r); else if (k.startsWith('daily:')) dailies += puzzleTreats(k, r); }
@@ -1149,7 +1186,7 @@
   function recordTreats(spec) {
     const k = bestKey(spec); if (!k) return null;
     const goals = goalsFor(spec, G.N), bits = goals.reduce((m, g) => m | (g.test(G) ? g.bit : 0), 0);
-    const prev = save.best[k] || { t: 0, g: 0 }, next = { t: Math.max(prev.t, G.lives), g: prev.g | bits };
+    const prev = save.best[k] || { t: 0, g: 0 }, won = spec.golden ? (spec.firstRun && !G.restarted ? GOLD_FIRST : GOLD_LATER) : G.lives, next = { t: Math.max(prev.t, won), g: prev.g | bits };
     const before = k in save.best ? puzzleTreats(k, prev) : 0, after = puzzleTreats(k, next);
     save.best[k] = next;
     return { gained: after - before, total: after, before, bestKept: next.t, bestGoals: bitCount(next.g), lives: G.lives, maxLives: G.maxLives, bits, prevBits: prev.g, goals, golden: !!spec.golden };
@@ -1254,7 +1291,7 @@
   const TUT = {
     N: 4,
     reg: [2, 0, 1, 1, 2, 2, 1, 1, 2, 2, 3, 3, 2, 2, 3, 3],
-    colors: [PALETTE[3], PALETTE[2], PALETTE[8], PALETTE[5]], // Mint, Lemon, Pink, Sky
+    colors: [PALETTE[3], PALETTE[2], PALETTE[4], PALETTE[5]], // Mint, Yellow, Pink, Sky
     steps: [
       { target: 1, text: 'Every <b>color</b> needs exactly one Jasper. The <b>green</b> patch has only one square, so Jasper must go there. <b>Double-tap</b> it!' },
       { info: 'Nice! Jasper now owns his <b>row</b> and <b>column</b>, and no other Jasper can <b>touch</b> him, not even corner to corner. Those squares are crossed out.' },
@@ -1553,7 +1590,7 @@
     const { wins, dayWins, shared, players, best } = headToHead();
     const me = save.lb.name;
     const two = players.slice(0, 2);
-    const tab = save.lb.tab === 'levels' ? 'levels' : 'daily';
+    const tab = save.lb.tab === 'daily' ? 'daily' : 'levels';
     const tr = lbTreats(), lv = lbLevels();
     const crownOf = (vals) => { const ps = two.filter((p) => vals[p] !== undefined); if (ps.length < 2 || vals[ps[0]] === vals[ps[1]]) return null; return vals[ps[0]] > vals[ps[1]] ? ps[0] : ps[1]; };
     const scoreCard = (val, sub, crown) => '<div class="lb-score">' + two.map((p, k) =>
@@ -1565,7 +1602,7 @@
         '<span class="lb-chip' + (c === p ? ' fastest' : '') + (vals[p] === undefined ? ' none' : '') + '">' + avatar(p, k) + (vals[p] === undefined ? '–' : fmt(vals[p])) + '</span>').join('') + '</div></div>';
     };
     const pick = (obj, f) => Object.fromEntries(two.filter((p) => obj[p]).map((p) => [p, f(obj[p])]));
-    let html = '<div class="choice-grid lb-tabs"><button class="choice' + (tab === 'daily' ? ' on' : '') + '" data-lb-tab="daily">Daily</button><button class="choice' + (tab === 'levels' ? ' on' : '') + '" data-lb-tab="levels">Levels</button></div>';
+    let html = '<div class="choice-grid lb-tabs"><button class="choice' + (tab === 'levels' ? ' on' : '') + '" data-lb-tab="levels">Levels</button><button class="choice' + (tab === 'daily' ? ' on' : '') + '" data-lb-tab="daily">Daily</button></div>';
     if (tab === 'daily') {
       const winVals = Object.fromEntries(two.map((p) => [p, wins[p] || 0]));
       html += scoreCard((p) => wins[p] || 0, (p) => 'puzzles won · ' + (dayWins[p] || 0) + ' days', crownOf(winVals));
