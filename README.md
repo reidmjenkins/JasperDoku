@@ -26,6 +26,8 @@ It's picked up automatically - the cartoon placeholder is only used until then.
 ## Features
 - First-time interactive tutorial (replay it from How to Play or Settings)
 - 120+ levels growing from 5×5 to 10×10, with a "Level up!" celebration at each new board size
+- Puzzles get harder as you go: each board size starts gentle and ends hard, and "Tricky" smaller boards (which need the hardest moves) are mixed in from level 13
+- Look-alike colors (like pink and rose, or blue and sky) are kept from touching on every board
 - Progress card on the home screen; All Levels screen with stars, best times and skipped levels
 - Daily Puzzle with a month calendar, current and best streak, and catch-up for missed days
 - 48 achievements in 7 sections (Levels, Skill, Speed, Daily, Golden, Rivals, Just for Fun), shown on the win screen as they unlock

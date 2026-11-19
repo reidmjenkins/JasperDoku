@@ -130,12 +130,34 @@
   const isGolden = (n) => GOLDEN.has(n);
   // the regular board size for a level number (golden levels don't change the size path)
   const baseSize = (n) => (n <= 4 ? 5 : n <= 12 ? 6 : n <= 28 ? 7 : n <= 50 ? 8 : n <= 80 ? 9 : 10);
+  // first and last level that share a regular board size
+  const sizeStretch = (n) => { const s = baseSize(n); let a = n, b = n; while (a > 1 && baseSize(a - 1) === s) a--; while (b < 400 && baseSize(b + 1) === s) b++; return [a, b]; };
+  // board size for a tricky small level, or 0 for a regular one (never two tricky levels in a row)
+  const trickyMemo = new Map();
+  function trickySize(n) {
+    if (n <= 12 || isGolden(n)) return 0;
+    if (trickyMemo.has(n)) return trickyMemo.get(n);
+    const size = baseSize(n), r = E.mulberry32(E.hashSeed('level-mix-' + n))();
+    let small = 0;
+    if (r < 0.18) small = size - 1;
+    else if (r < 0.28) small = size - 2;
+    else if (r < 0.34 && size >= 8) small = r < 0.31 ? 5 : 6;
+    if (small < 5 || trickySize(n - 1)) small = 0;
+    trickyMemo.set(n, small);
+    return small;
+  }
   function levelConfig(n) {
     if (isGolden(n)) return { size: 8, maxTier: 4, minTier: 2, golden: true };
     const size = baseSize(n);
-    const maxTier = n <= 2 ? 1 : n <= 6 ? 2 : n <= 12 ? 3 : 4;
-    const minTier = n >= 20 ? 3 : 0;
-    return { size, maxTier, minTier };
+    if (n <= 12) return { size, maxTier: n <= 2 ? 1 : n <= 6 ? 2 : n <= 12 ? 3 : 4, minTier: 0 };
+    // From level 13 on, puzzles get harder as you go: most levels use the current board
+    // size, and some are smaller boards made tricky (they need the hardest kinds of moves).
+    const small = trickySize(n), pickHard = Math.min(10, 3 + Math.floor(n / 15));
+    if (small) return { size: small, maxTier: 4, minTier: 4, pick: pickHard, tricky: true };
+    // regular board: starts gentle at each new size and ends on the hardest puzzles
+    const [a, b] = sizeStretch(n), p = (n - a) / Math.max(1, b - a);
+    const minTier = Math.max(n >= 20 ? 3 : 2, p < 0.34 ? 2 : p < 0.67 ? 3 : 4);
+    return { size, maxTier: 4, minTier, pick: p >= 0.67 ? 3 : 1 };
   }
   function levelSpec(n) { return Object.assign({ mode: 'level', id: n, seed: 'level-' + n }, levelConfig(n)); }
   // Leo replaces Jasper's picture on golden levels only; the rules are identical.
@@ -225,14 +247,53 @@
   const $ = (sel) => document.querySelector(sel);
   const boardEl = $('#board');
 
+  // ---------------------------------------------------------------- patch colors
+  // How alike two palette colors look (CIELAB distance). Colors closer than LOOKALIKE
+  // count as look-alikes, and look-alike patches are kept from touching whenever the
+  // board allows it.
+  const LOOKALIKE = 40;
+  const PAL_LAB = PALETTE.map((p) => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(p.hex.substr(i, 2), 16) / 255).map((c) => (c > 0.04045 ? ((c + 0.055) / 1.055) ** 2.4 : c / 12.92));
+    const f = (t) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+    const x = f((r * 0.4124 + g * 0.3576 + b * 0.1805) / 0.95047), y = f(r * 0.2126 + g * 0.7152 + b * 0.0722), z = f((r * 0.0193 + g * 0.1192 + b * 0.9505) / 1.08883);
+    return [116 * y - 16, 500 * (x - y), 200 * (y - z)];
+  });
+  const PAL_CLASH = PAL_LAB.map((a) => PAL_LAB.map((b) => Math.max(0, LOOKALIKE - Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]))));
+  // Pick a palette color for each patch (returns palette indexes, one per patch).
+  function colorOrder(N, reg, rng) {
+    const order = PALETTE.map((_, i) => i);
+    for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+    // how much border each pair of patches shares
+    const touch = [];
+    for (let i = 0; i < N * N; i++) {
+      const r = i / N | 0, c = i % N;
+      for (const j of [c + 1 < N ? i + 1 : -1, r + 1 < N ? i + N : -1]) {
+        if (j < 0 || reg[i] === reg[j]) continue;
+        const a = Math.min(reg[i], reg[j]), b = Math.max(reg[i], reg[j]);
+        const t = touch.find((x) => x[0] === a && x[1] === b);
+        if (t) t[2]++; else touch.push([a, b, 1]);
+      }
+    }
+    const cost = () => touch.reduce((s, [a, b, n]) => s + PAL_CLASH[order[a]][order[b]] * (1 + n / N), 0);
+    let cur = cost();
+    // swap colors around (including with the unused ones) while it lowers the clash
+    for (let k = 0; k < 1500 && cur > 0; k++) {
+      const a = Math.floor(rng() * N), b = Math.floor(rng() * order.length);
+      if (a === b) continue;
+      [order[a], order[b]] = [order[b], order[a]];
+      const next = cost();
+      if (next <= cur) cur = next; else [order[a], order[b]] = [order[b], order[a]];
+    }
+    return order;
+  }
+
   function startGame(spec) {
     showLoading(true);
     setTimeout(() => {
-      const puzzle = E.generate({ size: spec.size, seed: spec.seed, maxTier: spec.maxTier, minTier: spec.minTier });
+      const puzzle = E.generate({ size: spec.size, seed: spec.seed, maxTier: spec.maxTier, minTier: spec.minTier, pick: spec.pick });
       const N = puzzle.size;
       const rng = E.mulberry32(puzzle.seed ^ 0x9e3779b9);
-      const order = PALETTE.map((_, i) => i);
-      for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+      const order = colorOrder(N, puzzle.regions, rng);
       G = {
         spec, puzzle, N, reg: puzzle.regions,
         colors: order.slice(0, N).map((i) => PALETTE[i]),
@@ -351,7 +412,7 @@
   function renderHeader() {
     const s = G.spec;
     $('#game-title').textContent = s.mode === 'level' ? (s.golden ? '✨ Golden Level ' + s.id : 'Level ' + s.id) : s.mode === 'daily' ? 'Daily #' + s.n + (s.day === todayStr() ? '' : ' · ' + shortDate(s.day)) : 'Free Play';
-    const diffWord = s.golden ? ' · One golden treat' : s.mode === 'free' ? ' · ' + cap(save.settings.freeDiff) : s.mode === 'daily' ? (G.counts ? ' · Counts for leaderboard' : ' · Practice') : '';
+    const diffWord = s.golden ? ' · One golden treat' : s.tricky ? ' · Tricky' : s.mode === 'free' ? ' · ' + cap(save.settings.freeDiff) : s.mode === 'daily' ? (G.counts ? ' · Counts for leaderboard' : ' · Practice') : '';
     $('#game-sub').textContent = G.N + ' × ' + G.N + diffWord;
     $('#timer').classList.toggle('hidden-timer', !save.settings.timer);
     renderTimer();
@@ -959,7 +1020,7 @@
       const t = Math.floor((n - 1) / 5), [fx, fy] = MAP_STOPS[(n - 1) % 5];
       const x = fx * 100, y = H - TH - t * step + fy * TH, style = 'left:' + x + '%;top:' + y + 'px';
       const rec = save.levels[n] || {}, locked = n > save.level, size = baseSize(n);
-      if (size !== lastSize) { html += '<div class="lp-size" style="top:' + (y + 34) + 'px;' + (fx > .47 ? 'left:6%' : 'right:6%') + '">' + size + ' × ' + size + ' boards</div>'; lastSize = size; }
+      if (size !== lastSize) { html += '<div class="lp-size" style="top:' + (y + 34) + 'px;' + (fx > .47 ? 'left:6%' : 'right:6%') + '">' + size + ' × ' + size + ' boards from here</div>'; lastSize = size; }
       const b = save.best['level:' + n], tr = b ? puzzleTreats('level:' + n, b) : 0, maxTr = isGolden(n) ? GOLD_FIRST : 3;
       const cls = 'lp-node' + (isGolden(n) ? ' golden' : '') + (n === save.level ? ' current' : '') + (locked ? ' locked' : '') + (rec.done ? ' done' : '') + (rec.skipped && !rec.done ? ' skipped' : '');
       const stars = rec.done ? '<span class="lp-stars">' + [1, 2, 3].map((k) => '<i class="' + (k <= (rec.stars || 1) ? 'on' : '') + '">★</i>').join('') + '</span>' : '';
