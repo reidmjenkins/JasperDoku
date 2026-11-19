@@ -89,7 +89,7 @@
     chestTreats: 0,
     room: { owned: [], spent: 0 },
     looks: { owned: ['paws', 'classic'], bg: 'paws', pal: 'classic', gift: false, isNew: false },
-    journal: { got: {}, levels: {}, isNew: false, newId: null, page: 0 },
+    journal: { got: {}, levels: {}, isNew: false, newId: null, page: -1 },
   });
   let save = load();
   // carry over first-try treats recorded by the previous version (never from a skip)
@@ -208,7 +208,7 @@
     return set;
   })();
   function journalSave() {
-    const d = { got: {}, levels: {}, isNew: false, newId: null, page: 0 };
+    const d = { got: {}, levels: {}, isNew: false, newId: null, page: -1 };
     save.journal = Object.assign(d, save.journal || {});
     return save.journal;
   }
@@ -1950,7 +1950,8 @@
       case 'journal-read': $('#win').hidden = true; return openJournal(G && G.scrapGot ? G.scrapGot.page : undefined);
       case 'jr-prev': return journalTurn(-1);
       case 'jr-next': return journalTurn(1);
-      case 'jr-go': return journalTurn(+btn.dataset.p - jrCur);
+      case 'jr-go': return journalGo(+btn.dataset.p);
+      case 'jr-contents': return journalGo(-1);
       case 'looks-try': closeModal(); return openLooks(GIFT_LOOK);
       case 'looks-tab': looksTab = btn.dataset.tab; looksSel = null; return renderLooks();
       case 'looks-pick': looksSel = btn.dataset.look; return renderLooks();
@@ -2121,7 +2122,8 @@
     const J = journalSave();
     jrGlow = J.newId; J.isNew = false; J.newId = null;
     if (page === undefined && jrGlow) { const sc = SCRAPS.find((x) => x.id === jrGlow); if (sc) page = sc.page; }
-    jrCur = Math.max(0, Math.min(JOURNAL.PAGES.length - 1, page === undefined ? J.page || 0 : page));
+    jrCur = Math.max(-1, Math.min(JOURNAL.PAGES.length - 1, page === undefined ? (J.page === undefined ? -1 : J.page) : page));
+    if (jrCur >= 0 && !pageFound(jrCur)) jrCur = -1;
     persist(); looksBadge();
     renderJournal(0); showScreen('journal');
   }
@@ -2143,16 +2145,32 @@
     }
     return h + folio;
   }
+  // how much of a page is found: 0 none, 1 part, 2 all
+  const pageFound = (pi) => { const got = journalSave().got, sc = JOURNAL.PAGES[pi].scraps, n = sc.filter((x) => x[0] in got).length; return n === 0 ? 0 : n === sc.length ? 2 : 1; };
+  function contentsHTML() {
+    const newPage = jrGlow ? (SCRAPS.find((x) => x.id === jrGlow) || {}).page : -1;
+    return '<h4 class="jr-toc-h">Contents</h4><div class="jr-toc-wrap"><ol class="jr-toc">' + JOURNAL.PAGES.map((p, i) => {
+      const f = pageFound(i), cls = ['none', 'part', 'full'][f];
+      const name = f ? escapeHtml(p.title.replace('Night Walk No. ', 'Night Walk ')) : 'not found yet';
+      return '<li><button data-action="jr-go" data-p="' + i + '" class="' + cls + (i === newPage ? ' new' : '') + '"' + (f ? '' : ' disabled') + '><i class="mk"></i><span class="t">' + name + '</span><span class="n">' + (i + 1) + '</span></button></li>';
+    }).join('') + '</ol><div class="jr-legend"><span><i class="mk full"></i>found</span><span><i class="mk part"></i>part found</span><span><i class="mk none"></i>not yet</span></div></div>';
+  }
+  // the next page in a direction that has something on it (-1 = the contents page)
+  function nextFoundPage(from, d) {
+    for (let i = from + d; i >= 0 && i < JOURNAL.PAGES.length; i += d) if (pageFound(i)) return i;
+    return d < 0 ? -1 : from;
+  }
   let jrBusy = false;
   function renderJournal(dir) {
     const J = journalSave(), n = JOURNAL.PAGES.length;
     J.page = jrCur;
     const found = scrapsFound();
     $('#jr-count').textContent = found + ' of ' + SCRAPS.length + ' scraps found';
-    $('#jr-where').textContent = 'Page ' + (jrCur + 1) + ' of ' + n;
-    $('#jr-prev').disabled = jrCur === 0; $('#jr-next').disabled = jrCur === n - 1;
+    $('#jr-where').classList.toggle('on', jrCur < 0);
+    $('#jr-prev').disabled = jrCur < 0; $('#jr-next').disabled = nextFoundPage(jrCur, 1) === jrCur;
+    void n;
     $('#jr-hint').textContent = found ? '' : 'Every few levels, one of the squares where Jasper belongs hides a scrap of his journal. Place him there to find it.';
-    const pg = $('#jr-page'), html = journalPageHTML(jrCur);
+    const pg = $('#jr-page'), html = jrCur < 0 ? contentsHTML() : journalPageHTML(jrCur);
     if (!dir || matchMedia('(prefers-reduced-motion: reduce)').matches) { pg.innerHTML = html; return; }
     // a real page turn: the page swings over the spine on the left
     jrBusy = true;
@@ -2163,11 +2181,14 @@
     sfx('erase');
     setTimeout(() => { if (dir < 0) pg.innerHTML = html; leaf.remove(); jrBusy = false; }, 640);
   }
-  function journalTurn(d) {
+  // arrows and swipes skip blank pages; the contents page jumps straight to any found page
+  function journalTurn(d) { journalGo(nextFoundPage(jrCur, d > 0 ? 1 : -1)); }
+  function journalGo(to) {
     if (jrBusy) return;
-    const to = Math.max(0, Math.min(JOURNAL.PAGES.length - 1, jrCur + d));
+    to = Math.max(-1, Math.min(JOURNAL.PAGES.length - 1, to));
     if (to === jrCur) return;
-    jrCur = to; persist(); renderJournal(d > 0 ? 1 : -1);
+    const dir = to > jrCur ? 1 : -1;
+    jrCur = to; persist(); renderJournal(dir);
   }
   (function journalSwipe() {
     const book = $('#jr-book');
@@ -2176,6 +2197,7 @@
     book.addEventListener('pointerdown', (e) => { sx = e.clientX; sy = e.clientY; });
     book.addEventListener('pointerup', (e) => {
       if (sx === null) return;
+      if (e.target.closest('button')) { sx = null; return; }
       const dx = e.clientX - sx, dy = e.clientY - sy; sx = null;
       if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) return journalTurn(dx < 0 ? 1 : -1);
       // a tap near the right or left edge of the page turns it, like a real book
