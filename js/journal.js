@@ -61,40 +61,64 @@
     { id: 'leo', title: 'About Leo', kind: 'text', scraps: [
       ['leo-1', 'Leo was here first. I try to remember that when he stands over his bowl and stares at me like I\'m a burglar. I don\'t want his food. Mostly.'],
       ['leo-2', 'But tonight he slept with his back against mine, and his breathing went slow, and I thought: maybe this is how a dog says sorry.'] ] },
-    { id: 'ambush', title: 'A drawing', kind: 'draw', draw: 'ambush', caption: 'he never sees it coming (he always sees it coming)', scraps: [['ambush-1'], ['ambush-2']] },
+    { id: 'ambush', title: 'Drawing · The Ambush', kind: 'draw', draw: 'ambush', caption: 'he never sees it coming (he always sees it coming)', scraps: [['ambush-1'], ['ambush-2']] },
     { id: 'blinds', title: 'The Blinds', kind: 'text', scraps: [
       ['blinds-1', 'Someone closed the blinds again. I will never understand choosing to see less of the world.'],
       ['blinds-2', 'So I push them aside with my head, and there it is. The street, the birds, the whole night, waiting—'] ] },
-    { id: 'walk1', title: 'Night Walk No. 1 · The Owl', kind: 'text', scraps: [
+    { id: 'walk1', walk: 'The Owl', kind: 'text', scraps: [
       ['walk1-1', 'Three houses down there\'s an oak with a hollow in it. The owl who lives there says he\'s older than the streetlights.'],
       ['walk1-2', 'He asked where I was going. I said "nowhere in particular." He said that\'s the best place to—'] ] },
     { id: 'pets', title: 'Pets', kind: 'text', scraps: [
       ['pets-1', 'Pat pat pat, right above the tail. Yes. That. Perfect. Keep going— okay, that\'s enough. Now I have to bite you a little. It\'s not personal. It\'s love with teeth.'] ] },
-    { id: 'borrowed', title: 'A drawing', kind: 'draw', draw: 'borrowed', caption: 'Leo\'s ball. Leo\'s nap. My turn.', scraps: [['borrowed-1'], ['borrowed-2']] },
-    { id: 'walk2', title: 'Night Walk No. 2 · The Rain', kind: 'text', scraps: [
+    { id: 'raccoons', walk: 'The Raccoons', kind: 'text', scraps: [
+      ['raccoons-1', 'Behind the house with the green trash cans, three raccoons run a business. They asked if I wanted to join. I told them I already have a job: sleeping next to Leo.'],
+      ['raccoons-2', 'They gave me a bottle cap anyway, for being polite. I keep it hidden under the—'] ] },
+    { id: 'borrowed', title: 'Drawing · Borrowed', kind: 'draw', draw: 'borrowed', caption: 'Leo\'s ball. Leo\'s nap. My turn.', scraps: [['borrowed-1'], ['borrowed-2']] },
+    { id: 'walk2', walk: 'The Rain', kind: 'text', scraps: [
       ['walk2-1', 'It rained tonight. The other cats ran under porches. I didn\'t. Rain is only the sky giving you a bath.'],
       ['walk2-2', 'But by the third street my fur was heavy, and all I could think of was the sofa, and Mom\'s lap, and Dad\'s—'] ] },
     { id: 'zoomies', title: 'Zoomies', kind: 'text', scraps: [
       ['zoomies-1', 'Around 2 a.m. something comes over me. I don\'t know what it is, but my legs do. Up the stairs, down the stairs, across the bed, over Leo (sorry Leo), up the—'] ] },
-    { id: 'walk3', title: 'Night Walk No. 3 · The Moon Meeting', kind: 'text', scraps: [
+    { id: 'fireflies', walk: 'The Fireflies', kind: 'text', scraps: [
+      ['fireflies-1', 'In the park at the end of our street, the grass fills with tiny lights in summer. I tried to catch one. It landed on my nose and blinked at me.'],
+      ['fireflies-2', 'I let it go. Some things are better watched than caught. (Leo would have eaten it.)'] ] },
+    { id: 'walk3', walk: 'The Moon Meeting', kind: 'text', scraps: [
       ['walk3-1', 'On full moons, the neighborhood cats meet on the roof of the blue house. We don\'t do much. We sit in a circle and look at the moon. A tabby named Biscuit takes attendance.'],
       ['walk3-2', 'They asked what I\'d do if I could do anything. I said I already have it: a mom, a dad, a warm bed, and a brother who\'s—'] ] },
     { id: 'uphigh', title: 'Up High', kind: 'text', scraps: [
       ['uphigh-1', 'Behind Dad\'s desk there\'s a bed that floats. From up there I watch him work, which mostly means typing and sighing. I\'m helping.'] ] },
-    { id: 'route', title: 'A drawing', kind: 'draw', draw: 'route', caption: 'my route (don\'t show Leo)', scraps: [['route-1'], ['route-2']] },
-    { id: 'walk4', title: 'Night Walk No. 4 · The Fox', kind: 'text', scraps: [
+    { id: 'porch', walk: 'The Porch Light', kind: 'text', scraps: [
+      ['porch-1', 'On the corner there\'s a lady who leaves her porch light on all night. She says it\'s for "whoever needs it." I sat on her steps for a while.'],
+      ['porch-2', 'She told me about her old cat, Peaches, who used to sit right where I was sitting. So I stayed a little longer. It seemed like the right thing to—'] ] },
+    { id: 'route', title: 'Drawing · My Route', kind: 'draw', draw: 'route', caption: 'my route (don\'t show Leo)', scraps: [['route-1'], ['route-2']] },
+    { id: 'walk4', walk: 'The Fox', kind: 'text', scraps: [
       ['walk4-1', 'I met a fox under the streetlight at the end of the block. She asked if I was lost.'],
       ['walk4-2', 'I told her I\'ve never been lost. I just haven\'t been home yet.'] ] },
+    { id: 'sprinklers', walk: 'The Sprinklers', kind: 'text', scraps: [
+      ['sprinklers-1', 'At exactly 4 a.m., every lawn on the next street over starts hissing like an angry cat. I was not startled. I simply jumped very high for no reason.'],
+      ['sprinklers-2', 'Then I walked home on the sidewalk with all the dignity a wet cat can have, which is a lot, actually.'] ] },
     { id: 'mom', title: 'Mom', kind: 'text', scraps: [
       ['mom-1', 'When Mom picks me up I go soft all over, like warm bread. I don\'t decide to. It just happens.'] ] },
+    { id: 'opossum', walk: 'The Opossum', kind: 'text', scraps: [
+      ['opossum-1', "There's an opossum under the porch across the street. Every time I say hello, she falls over and pretends to be dead."],
+      ['opossum-2', "I've started bringing her a leaf each night. Yesterday she only pretended for a little while. I think we're becoming friends."] ] },
     { id: 'leo2', title: 'Leo, Again', kind: 'text', scraps: [
       ['leo2-1', 'Sometimes I think Leo\'s afraid I\'ll take something from him. I want to tell him I don\'t need his food, or his spot, or his tennis balls. I just want a brother.'],
       ['leo2-2', '(I do need his tennis balls occasionally.)'] ] },
-    { id: 'string', title: 'A drawing', kind: 'draw', draw: 'string', caption: 'the string and I are in a disagreement', scraps: [['string-1'], ['string-2']] },
+    { id: 'kitten', walk: 'The Lost Kitten', kind: 'text', scraps: [
+      ['kitten-1', 'Tonight I found a kitten crying under a parked car, three blocks from anywhere. Tiny. Stripes. Very loud for her size.'],
+      ['kitten-2', "I walked her home one block at a time, the way Mom carries me to bed when I'm sleepy. Her people cried happy tears. I pretended I was just passing by—"] ] },
+    { id: 'string', title: 'Drawing · The Jellyfish', kind: 'draw', draw: 'string', caption: 'the string and I are in a disagreement', scraps: [['string-1'], ['string-2']] },
     // the last page: always the final scrap found
-    { id: 'walk5', title: 'Night Walk No. 5 · Where I Go', kind: 'text', finale: true, scraps: [
+    { id: 'star', walk: 'The Shooting Star', kind: 'text', scraps: [
+      ['star-1', "Lying in the chair out back, I watched a star fall out of the sky. The owl says you're supposed to wish on it."],
+      ['star-2', "I didn't know what to wish for. Everything I want is already asleep inside this house."] ] },
+    { id: 'walk5', walk: 'Where I Go', kind: 'text', finale: true, scraps: [
       ['walk5-1', 'You always wonder where I go at night. Here\'s the truth.'],
       ['walk5-2', 'I go out to see how big the world is. And every night I learn it\'s exactly as big as the walk home to you.'] ] },
   ];
+  // night walks are numbered in book order
+  let walkNo = 0;
+  for (const p of PAGES) if (p.walk) p.title = 'Night Walk No. ' + (++walkNo) + ' · ' + p.walk;
   window.JASPER_JOURNAL = { PAGES, DRAW, FIRST: 'hello-1' };
 })();
