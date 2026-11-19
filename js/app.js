@@ -288,8 +288,8 @@
     boardEl.style.setProperty('--n', N);
     boardEl.innerHTML = '';
     const inner = N >= 9 ? 0.75 : 1;          // half the small gap between every square
-    const gap = 0;                            // patches touch: only their colors set them apart
-    const tight = 0;                          // square corners so touching patches meet cleanly
+    const gap = inner;                        // same gap between patches - color tells them apart
+    const tight = N >= 9 ? 4 : N >= 7 ? 5 : 6; // corner rounding on every square
     for (let i = 0; i < N * N; i++) {
       const r = (i / N) | 0, c = i % N;
       const el = document.createElement('div');
