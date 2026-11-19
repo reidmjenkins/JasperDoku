@@ -111,6 +111,8 @@
     return defaults();
   }
   function persist() {
+    // the room page reads this to know how many treats there are to spend
+    try { save.jarEarned = treatTotals().total + (save.chestTreats || 0); } catch (e) { /* not ready during start-up */ }
     try { localStorage.setItem(STORE_KEY, JSON.stringify(save)); } catch (e) { /* ignore */ }
   }
 
@@ -869,17 +871,17 @@
     $('#home-size').textContent = size + ' × ' + size;
     $('#home-date').textContent = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
     $('#home-lb-sub').textContent = homeLbSub();
+    { const el = $('#home-room-sub'); if (el) el.textContent = treatJar() + ' treats to spend'; }
     $('#home-ach-sub').textContent = Object.keys(save.achievements).length + ' of ' + ACHIEVEMENTS.length + ' unlocked';
   }
   // ---------------------------------------------------------------- level path & chests
   const CHEST_EVERY = 25;
   const COSMETICS = {
-    crown: 'Little crown', bow: 'Pink bow', party: 'Party hat', royal: 'Royal pillow', donut: 'Donut bed', box: 'Cardboard box bed',
-    rug: 'Woven rug', shelf: 'Book shelf', feeder: 'Bird feeder', post: 'Scratching post', scratcher: 'Cardboard scratcher',
-    yarn: 'Yarn ball', mouse: 'Toy mouse', 'wall-sage': 'Sage stripes wallpaper', 'wall-night': 'Starry night wallpaper',
+    crown: 'Little crown', bow: 'Pink bow', party: 'Party hat', post: 'Scratching post', scratcher: 'Cardboard scratcher',
+    yarn: 'Yarn ball', mouse: 'Toy mouse', fire: 'Cozy fire',
   };
   const WINTER_COSMETICS = { santa: 'Santa hat', antlers: 'Reindeer antlers', scarf: 'Cozy scarf', tree: 'Christmas tree', lights: 'String lights', gifts: 'Gift boxes',
-    'stock-R': 'Stocking R', 'stock-K': 'Stocking K', 'stock-J': 'Stocking J', 'stock-L': 'Stocking L', 'wall-candy': 'Candy cane wallpaper' };
+    'stock-R': 'Stocking R', 'stock-K': 'Stocking K', 'stock-J': 'Stocking J', 'stock-L': 'Stocking L' };
   const chestReady = (k) => save.level > k * CHEST_EVERY && !save.chests[k];
   const CHEST_SVG = '<svg viewBox="0 0 72 64" aria-hidden="true">' +
     // toys peeking out: feather wand, yarn ball, toy mouse
@@ -1695,6 +1697,7 @@
       case 'lb-day-next': { const d = new Date(lbDay + 'T12:00'); d.setDate(d.getDate() + 1); lbDay = todayStr(d) > todayStr() ? todayStr() : todayStr(d); return renderLeaderboard(); }
       case 'lb-refresh': return lbSync(true).then(renderLeaderboard);
       case 'daily': return openDaily();
+      case 'room': persist(); location.href = 'room.html'; return;
       case 'free': return openFreePlay();
       case 'free-start': closeModal(); return startGame(freeSpec());
       case 'levels': return renderLevels();
