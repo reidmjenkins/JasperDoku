@@ -1,5 +1,5 @@
 // Offline support: keep a copy of the game on the device.
-const CACHE = 'jasperdoku-v18';
+const CACHE = 'jasperdoku-v19';
 const FILES = [
   './', './index.html', './room.html', './css/style.css', './js/config.js', './js/engine.js', './js/app.js',
   './assets/jasper.webp', './assets/jasper-full.webp', './assets/leo.webp', './assets/leo-full.webp', './assets/jasper-placeholder.svg', './assets/icon-192.png', './assets/icon-512.png', './assets/apple-touch-icon.png', './manifest.webmanifest',

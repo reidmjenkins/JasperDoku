@@ -147,6 +147,15 @@
   function yesterdayStr() { const d = new Date(); d.setDate(d.getDate() - 1); return todayStr(d); }
   // day number from a 'YYYY-MM-DD' string (used to share streaks on the leaderboard)
   const dayNum = (ds) => { const [y, m, d] = ds.split('-').map(Number); return Math.round((Date.UTC(y, m - 1, d) - Date.UTC(2026, 0, 1)) / 864e5); };
+  const STREAK_REWARDS = [[3, 5], [7, 15], [14, 30], [30, 60], [60, 100], [100, 150]];
+  function nextStreakReward(n) { return STREAK_REWARDS.find(([d]) => d > n) || null; }
+  function grantStreakReward(n) {
+    const hit = STREAK_REWARDS.find(([d]) => d === n); if (!hit) return 0;
+    const start = (() => { const d = new Date(); d.setDate(d.getDate() - (n - 1)); return todayStr(d); })();
+    save.daily.rewarded = save.daily.rewarded || {};
+    const key = n + '@' + start; if (save.daily.rewarded[key]) return 0;
+    save.daily.rewarded[key] = true; save.chestTreats = (save.chestTreats || 0) + hit[1]; return hit[1];
+  }
   function streakNow() {
     const d = save.daily, today = todayStr();
     const alive = d.last === today || d.last === yesterdayStr();
@@ -659,7 +668,7 @@
     const lost = G.wrongPlaced;
     const stars = lost === 0 ? 3 : lost === 1 ? 2 : 1;
     const spec = G.spec;
-    let milestone = 0, streakUp = 0;
+    let milestone = 0, streakUp = 0, streakBonus = 0;
     if (spec.mode === 'level') {
       const prev = save.levels[spec.id] || {};
       const nextSize = baseSize(spec.id + 1);
@@ -679,6 +688,7 @@
           save.daily.last = spec.day;
           save.daily.best = Math.max(save.daily.best || 0, save.daily.streak);
           streakUp = save.daily.streak;
+          streakBonus = grantStreakReward(streakUp);
           setTimeout(() => lbSync(), 600);
         }
         save.daily.done[spec.id] = { time: G.elapsed, stars, hints: G.hints };
@@ -703,7 +713,7 @@
     const puzzleKey = spec.mode === 'daily' ? 'daily:' + spec.id : null;
     if (puzzleKey && G.counts) lbQueue(puzzleKey, G.elapsed, G.wrongPlaced, G.hints);
     const myScore = G.elapsed + HINT_PENALTY * G.hints, counted = !!G.counts;
-    setTimeout(() => { showWin(stars, { milestone, unlocked, streakUp, treats }); if (puzzleKey) lbWinCompare(puzzleKey, myScore, counted); }, 450);
+    setTimeout(() => { showWin(stars, { milestone, unlocked, streakUp, streakBonus, treats }); if (puzzleKey) lbWinCompare(puzzleKey, myScore, counted); }, 450);
   }
 
   const FLAME = '<svg class="flame" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c1 3.5 5 5.5 5 10.5A5 5 0 0 1 7 12.5c0-2 1-3.5 2-4.5 0 2 1 3 2 3 0-3-1-6 1-9Z" fill="currentColor"/></svg>';
@@ -719,7 +729,7 @@
     if (info.milestone) ms.innerHTML = '<span class="ms-grid" style="--n:' + info.milestone + '"></span><div><b>' + info.milestone + ' × ' + info.milestone + ' boards unlocked</b><small>Bigger boards, trickier puzzles</small></div>';
     const wsk = $('#win-streak');
     wsk.hidden = !info.streakUp;
-    if (info.streakUp) wsk.innerHTML = FLAME + '<b>' + info.streakUp + '-day streak!</b><small>' + (info.streakUp === 1 ? 'Come back tomorrow to make it 2' : 'Kept alive for today') + '</small>';
+    if (info.streakUp) { const nx = nextStreakReward(info.streakUp); wsk.innerHTML = FLAME + '<b>' + info.streakUp + '-day streak!</b>' + (info.streakBonus ? '<span class="streak-bonus">' + treatSVG('treat inline-treat') + '+' + info.streakBonus + ' streak reward</span>' : '') + '<small>' + (nx ? (nx[0] - info.streakUp) + ' more day' + (nx[0] - info.streakUp === 1 ? '' : 's') + ' to +' + nx[1] + ' treats' : 'Kept alive for today') + '</small>'; }
     const wt = $('#win-treats'), tr = info.treats;
     wt.hidden = !tr;
     if (tr) {
@@ -836,9 +846,10 @@
       card.classList.toggle('lit', sk.today);
       card.classList.toggle('waiting', sk.alive && !sk.today);
       $('#sc-title').textContent = sk.n ? sk.n + '-day streak' : 'Start a streak';
-      $('#sc-sub').textContent = sk.today ? 'Done for today · best ' + Math.max(sk.best, sk.n)
-        : sk.alive ? 'Play a daily today to keep it'
-        : 'One daily a day builds it' + (sk.best > 1 ? ' · best ' + sk.best : '');
+      const nx = nextStreakReward(sk.n), reward = nx ? ' · day ' + nx[0] + ': +' + nx[1] + ' treats' : '';
+      $('#sc-sub').textContent = sk.today ? 'Done for today' + reward
+        : sk.alive ? 'Play a daily today to keep it' + reward
+        : 'Day 3 of a streak: +5 treats' + (sk.best > 1 ? ' · best ' + sk.best : '');
       // last 7 days: which ones are part of the current streak
       let dots = '';
       const lastN = sk.alive ? dayNum(save.daily.last) : -1e9, firstN = lastN - sk.n + 1;
@@ -1645,6 +1656,7 @@
 
   // ---------------------------------------------------------------- button wiring
   document.addEventListener('click', (e) => {
+    { const d = document.getElementById('drop'); if (d && !d.hidden && !e.target.closest('.menu-wrap')) d.hidden = true; }
     const cd = e.target.closest('[data-day]');
     if (cd && !cd.disabled) { dailyDay = cd.dataset.day; return renderDaily(); }
     const lt = e.target.closest('[data-lb-tab]');
@@ -1684,7 +1696,7 @@
       case 'tutorial': e.preventDefault(); closeModal(); return openTutorial(false);
       case 'tut-next': return tutNext();
       case 'tut-skip': return tutFinish();
-      case 'achievements': return openAchievements();
+      case 'achievements': $('#drop').hidden = true; return openAchievements();
       case 'daily-today': { const nd = nextDailyN(dailyDay); return nd ? startGame(dailySpec(dailyDay, nd)) : undefined; }
       case 'cal-prev': calMonth.setMonth(calMonth.getMonth() - 1); return renderDaily();
       case 'cal-next': calMonth.setMonth(calMonth.getMonth() + 1); return renderDaily();
@@ -1701,8 +1713,9 @@
       case 'free': return openFreePlay();
       case 'free-start': closeModal(); return startGame(freeSpec());
       case 'levels': return renderLevels();
-      case 'howto': return openHowTo();
-      case 'settings': return openSettings();
+      case 'howto': $('#drop').hidden = true; return openHowTo();
+      case 'menu': { const d = $('#drop'), open = d.hidden; d.hidden = !open; $('#menu-btn').setAttribute('aria-expanded', open); return; }
+      case 'settings': $('#drop').hidden = true; return openSettings();
       case 'home': return goHome();
       case 'undo': return undo();
       case 'hint': return showHint();

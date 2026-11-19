@@ -743,3 +743,17 @@ html.dark .lp-node.locked { background: rgba(40,40,44,.78); color: rgba(255,255,
 .lp-toybox.locked b { color: #7A6A55; }
 .lp-toybox.current b { background: var(--accent); color: #fff; }
 @media (prefers-reduced-motion: reduce) { .lp-toybox.ready svg { animation: none; } }
+
+/* ---------- three-bar menu ---------- */
+.menu-wrap { position: relative; }
+.drop { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; min-width: 220px; background: var(--card); border-radius: 14px; box-shadow: var(--shadow-2), 0 0 0 .5px var(--hair); padding: 6px; display: flex; flex-direction: column; animation: dropIn .16s ease-out; }
+.drop[hidden] { display: none; }
+@keyframes dropIn { from { opacity: 0; transform: translateY(-4px) scale(.98); } }
+.drop-row { display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 10px; text-align: left; font-size: 16px; font-weight: 500; color: var(--ink); }
+.drop-row:active { background: var(--fill); }
+.drop-row .mi { width: 30px; height: 30px; }
+.drop-row span:last-child { display: flex; flex-direction: column; }
+.drop-row small { font-size: 12px; color: var(--ink-2); font-weight: 400; }
+#screen-home .streak-card { margin: 14px 0 0; }
+.streak-bonus { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; color: #C07800; background: rgba(255,201,60,.22); border-radius: 999px; padding: 2px 10px; margin: 2px 0; }
+#screen-home > .home-top, body.holiday #screen-home > .home-top { position: relative; z-index: 20; }
