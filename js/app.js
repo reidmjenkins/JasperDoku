@@ -15,8 +15,8 @@
     { name: 'Pink', hex: '#FFAABB' },
     { name: 'Sky', hex: '#99DDFF' },
     { name: 'Pear', hex: '#BBCC33' },
-    { name: 'Grey', hex: '#DDDDDD' },
-    { name: 'Olive', hex: '#AAAA00' },
+    { name: 'Latte', hex: '#D2B394' },
+    { name: 'Rose', hex: '#DD7799' },
     { name: 'Lavender', hex: '#C9B3EA' },
   ];
 
@@ -917,6 +917,8 @@
   const MAP_STOPS = [[.494, .894], [.443, .628], [.542, .453], [.427, .29], [.494, .114]];
   const MAP_RATIO = 871 / 900;
   // cover-ups for houses on the map picture: [x, y, width, height] in the 900 x 871 picture
+  // the strip over each join: starts 46px above the lower picture's top edge, 132px tall (900px-wide picture)
+  const SEAM_UP = 46, SEAM_H = 132;
   const MAP_COVERS = { tl: [50, 0, 357, 316], ml: [10, 270, 440, 300], mr: [504, 192, 215, 272], br: [566, 487, 334, 384] };
   // which houses are hidden on map section t (levels 5t+1 to 5t+5):
   // the two middle houses take turns, and every third section also loses the top-left
@@ -944,7 +946,12 @@
       // trees and lawn painted over some houses so each stretch of five levels looks a little different
       for (const k of mapHidden(t)) {
         const [x, y, w, h] = MAP_COVERS[k];
-        html += '<img class="lp-map-cover" src="assets/map-cover-' + k + '.webp" alt="" style="left:' + (x / 9) + '%;width:' + (w / 9) + '%;top:' + (tileTop + y / 871 * TH) + 'px;height:' + (h / 871 * TH) + 'px">';
+        html += '<img class="lp-map-cover' + (k === 'br' && t > 0 ? ' fade' : '') + '" src="assets/map-cover-' + k + '.webp" alt="" style="left:' + (x / 9) + '%;width:' + (w / 9) + '%;top:' + (tileTop + y / 871 * TH) + 'px;height:' + (h / 871 * TH) + 'px">';
+      }
+      // grass and a hedge row over the join with the picture below, so the two never show through each other
+      if (t > 0) {
+        const below = tileTop + step;
+        html += '<img class="lp-map-seam" src="assets/map-seam' + (mapHidden(t - 1).includes('tl') ? '-notl' : '') + '.webp" alt="" style="top:' + (below - SEAM_UP / 871 * TH) + 'px;height:' + (SEAM_H / 871 * TH) + 'px">';
       }
     }
     let lastSize = 0;
