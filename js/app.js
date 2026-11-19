@@ -7,7 +7,7 @@
   // ---------------------------------------------------------------- colors
   // Paul Tol's "Light" colour scheme (made for coloured cells with marks on top; colour-blind safe),
   // plus a soft lavender as the 10th colour for 10 x 10 boards
-  const PALETTE = [
+  const CLASSIC = [
     { name: 'Blue', hex: '#77AADD' },
     { name: 'Orange', hex: '#EE8866' },
     { name: 'Yellow', hex: '#EEDD88' },
@@ -19,6 +19,33 @@
     { name: 'Rose', hex: '#DD7799' },
     { name: 'Lavender', hex: '#C9B3EA' },
   ];
+  const mk = (list) => list.map(([name, hex]) => ({ name, hex }));
+  // ---------------------------------------------------------------- Looks (bought with treats)
+  // Classic is the calm everyday set (easy on the eyes, look-alikes kept apart). The bought sets are
+  // bold on purpose and can be switched back any time; look-alikes are still kept apart where possible.
+  const LOOKS = {
+    bg: [
+      { id: 'paws', name: 'Paw prints', price: 0 },
+      { id: 'yarn', name: 'Yarn', price: 20 },
+      { id: 'fish', name: 'Fishbowl', price: 25 },
+      { id: 'leaves', name: 'Leaves', price: 30 },
+      { id: 'blanket', name: 'Cozy blanket', price: 30 },
+      { id: 'stars', name: 'Starry night', price: 35 },
+    ],
+    pal: [
+      { id: 'classic', name: 'Classic', price: 0, colors: CLASSIC },
+      { id: 'christmas', name: 'Christmas', price: 30, colors: mk([['Santa red', '#C8102E'], ['Holly', '#1E7B34'], ['Gold star', '#E8B923'], ['Pine', '#0F4D2C'], ['Candy cane', '#F25C78'], ['Cranberry', '#8B1A2B'], ['Frost', '#6FB7E0'], ['Tinsel', '#A9B4C2'], ['Gingerbread', '#B5652B'], ['Mistletoe', '#7FBF4D']]) },
+      { id: 'jewel', name: 'Jewel box', price: 35, colors: mk([['Ruby', '#B0154B'], ['Sapphire', '#1F4E9C'], ['Emerald', '#0E8A5F'], ['Amethyst', '#6A2C91'], ['Topaz', '#E3A41B'], ['Garnet', '#7A1F2B'], ['Turquoise', '#1BA3A8'], ['Amber', '#C76B14'], ['Rose quartz', '#D9558C'], ['Onyx', '#3D4B5C']]) },
+      { id: 'candy', name: 'Candy shop', price: 35, colors: mk([['Bubblegum', '#FF5FA8'], ['Spearmint', '#30D5A0'], ['Lemon drop', '#FFD23F'], ['Grape', '#8F5BE8'], ['Tangerine', '#FF8C42'], ['Blue raspberry', '#00B0F0'], ['Cherry', '#EE2E4A'], ['Sour apple', '#9BDD2B'], ['Cotton candy', '#C9A0FF'], ['Caramel', '#D9822B']]) },
+      { id: 'ocean', name: 'Ocean', price: 35, colors: mk([['Deep sea', '#0B3C6E'], ['Cobalt', '#1F6FD1'], ['Turquoise', '#00B5C8'], ['Lagoon', '#5EE0E0'], ['Seafoam', '#2FC48F'], ['Kelp', '#3E7D2B'], ['Coral', '#FF6F59'], ['Starfish', '#FF9F1C'], ['Sand', '#E8C766'], ['Jellyfish', '#A05CD6']]) },
+      { id: 'meadow', name: 'Meadow', price: 35, colors: mk([['Grass', '#3FAE3A'], ['Fern', '#1E6B3A'], ['Buttercup', '#FFD60A'], ['Poppy', '#E63946'], ['Cornflower', '#3A6FE0'], ['Lavender', '#9A6BDB'], ['Clover', '#F27EB6'], ['Sunflower', '#F5A623'], ['Sky', '#5BC0EB'], ['Honey', '#B5782B']]) },
+      { id: 'sunset', name: 'Sunset', price: 40, colors: mk([['Magenta', '#D6246E'], ['Flame', '#FF5A1F'], ['Gold', '#FFB703'], ['Violet', '#5A189A'], ['Coral', '#FF7B7B'], ['Dusk blue', '#3D5A99'], ['Peach', '#FFA66B'], ['Berry', '#9D174D'], ['Orchid', '#C86BFA'], ['Ember', '#B5361C']]) },
+      { id: 'galaxy', name: 'Galaxy', price: 45, colors: mk([['Cosmic purple', '#4B1D8F'], ['Nebula pink', '#E040A0'], ['Starlight', '#4FA3FF'], ['Aurora', '#2EE6A6'], ['Comet', '#8C7BFF'], ['Midnight', '#1B2A6B'], ['Supernova', '#FF6B3D'], ['Moon', '#D9D4C7'], ['Meteor', '#B83280'], ['Ion teal', '#14A3B8']]) },
+      { id: 'autumn', name: 'Autumn', price: 40, colors: mk([['Rust', '#A63A21'], ['Pumpkin', '#E07B24'], ['Mustard', '#D9A21B'], ['Forest', '#2F5D3A'], ['Cranberry', '#7A1E3A'], ['Plum', '#5B3A7A'], ['Navy', '#1F3E6B'], ['Brass', '#B8862B'], ['Moss', '#6E7F2F'], ['Chestnut', '#8A4B2A']]) },
+    ],
+  };
+  const GIFT_LOOK = 'yarn';   // the free background found in the next toy box
+  const PALETTE = CLASSIC.slice();   // the colors in use (swapped in place when the color set changes)
 
   // ---------------------------------------------------------------- Jasper's face
   // Jasper's and Leo's pictures: small WebP files, loaded once and then kept on the phone.
@@ -61,6 +88,8 @@
     chests: {},        // chest number -> what came out
     chestTreats: 0,
     room: { owned: [], spent: 0 },
+    looks: { owned: ['paws', 'classic'], bg: 'paws', pal: 'classic', gift: false, isNew: false },
+    journal: { got: {}, levels: {}, isNew: false, newId: null, page: 0 },
   });
   let save = load();
   // carry over first-try treats recorded by the previous version (never from a skip)
@@ -160,6 +189,88 @@
     return { size, maxTier: 4, minTier, pick: p >= 0.67 ? 3 : 1 };
   }
   function levelSpec(n) { return Object.assign({ mode: 'level', id: n, seed: 'level-' + n }, levelConfig(n)); }
+
+  // ---------------------------------------------------------------- Jasper's Journal scraps
+  // Every 4-7 levels (fixed seed, same on every phone) one square where Jasper belongs hides a scrap.
+  // Only levels not beaten yet give one, so a player who is past some scrap levels simply
+  // finds the first scrap on the next one: one scrap per level, never a pile at once.
+  const JOURNAL = window.JASPER_JOURNAL || { PAGES: [], DRAW: {}, FIRST: null };
+  const SCRAPS = [];
+  JOURNAL.PAGES.forEach((p, pi) => p.scraps.forEach((sc, k) => SCRAPS.push({ id: sc[0], text: sc[1] || '', page: pi, k })));
+  const SCRAP_LEVELS = (() => {
+    const rng = E.mulberry32(E.hashSeed('jasperdoku-journal-scraps'));
+    const set = new Set();
+    for (let n = 3; n < 5000;) {
+      const prev = n; n += 4 + Math.floor(rng() * 4);
+      if (isGolden(n)) n += n - prev > 4 ? -1 : 1;   // golden levels belong to Leo; the gap stays 4-7
+      set.add(n);
+    }
+    return set;
+  })();
+  function journalSave() {
+    const d = { got: {}, levels: {}, isNew: false, newId: null, page: 0 };
+    save.journal = Object.assign(d, save.journal || {});
+    return save.journal;
+  }
+  const scrapsFound = () => SCRAPS.filter((x) => x.id in journalSave().got).length;
+  // the square that hides this board's scrap, or -1
+  function scrapCellFor(spec, puzzle) {
+    if (spec.mode !== 'level' || !SCRAP_LEVELS.has(spec.id)) return -1;
+    const J = journalSave();
+    if (J.levels[spec.id] || (save.levels[spec.id] && save.levels[spec.id].done)) return -1;
+    if (scrapsFound() >= SCRAPS.length) return -1;
+    const N = puzzle.size, r = Math.floor(E.mulberry32(E.hashSeed('scrap-cell-' + spec.id))() * N);
+    return r * N + puzzle.solution[r];
+  }
+  // which scrap turns up: the very first is page one; the last page always comes last; the rest in a shuffled order
+  function nextScrap(n) {
+    const J = journalSave(), left = SCRAPS.filter((x) => !(x.id in J.got));
+    if (!left.length) return null;
+    if (!Object.keys(J.got).length) { const f = left.find((x) => x.id === JOURNAL.FIRST); if (f) return f; }
+    const pool = left.filter((x) => !JOURNAL.PAGES[x.page].finale);
+    if (!pool.length) return left[0];
+    return pool[Math.floor(E.mulberry32(E.hashSeed('scrap-pick-' + n))() * pool.length)];
+  }
+  let scrapAway = null;
+  function grantScrap(i) {
+    const sc = nextScrap(G.spec.id);
+    if (!sc) return;
+    const J = journalSave();
+    J.got[sc.id] = G.spec.id; J.levels[G.spec.id] = sc.id; J.isNew = true; J.newId = sc.id;
+    G.scrapCell = -1; G.scrapGot = sc;
+    persist(); looksBadge();
+    showScrapPop(i);
+  }
+  // the scrap pops up ABOVE the board (its own top layer), then tucks itself away after ~3 seconds or on a tap
+  function showScrapPop(i) {
+    if (scrapAway) scrapAway(true);
+    const cell = boardEl.children[i];
+    if (!cell) return;
+    const r = cell.getBoundingClientRect(), W = 168;
+    const el = document.createElement('div');
+    el.className = 'scrap-pop';
+    el.setAttribute('role', 'status');
+    el.innerHTML = '<b>Jasper found a scrap!</b><small>Tap to tuck it away</small><span class="scrap-tick"></span>';
+    const below = r.top < 150;
+    el.classList.toggle('below', below);
+    el.style.left = Math.max(W / 2 + 8, Math.min(innerWidth - W / 2 - 8, r.left + r.width / 2)) + 'px';
+    el.style.top = (below ? r.bottom + 6 : r.top - 6) + 'px';
+    document.body.appendChild(el);
+    requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('in')));
+    sfx('mark');
+    let gone = false;
+    const timer = setTimeout(() => away(), 3400);
+    function away(now) {
+      if (gone) return; gone = true; clearTimeout(timer); scrapAway = null;
+      if (now) return el.remove();
+      const b = document.querySelector('#screen-game .game-top .icon-btn');
+      el.classList.add('away');
+      if (b) { const br = b.getBoundingClientRect(); el.style.left = (br.left + br.width / 2) + 'px'; el.style.top = (br.top + br.height / 2) + 'px'; }
+      setTimeout(() => { el.remove(); if (G && !G.done) toast('📜 Saved to Jasper\'s Journal'); }, 520);
+    }
+    scrapAway = away;
+    el.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); away(); });
+  }
   // Leo replaces Jasper's picture on golden levels only; the rules are identical.
   const isGoldenGame = () => !!(G && G.spec && G.spec.golden);
   const pieceSrc = () => (isGoldenGame() ? 'assets/leo.webp' : jasperSrc);
@@ -252,13 +363,17 @@
   // count as look-alikes, and look-alike patches are kept from touching whenever the
   // board allows it.
   const LOOKALIKE = 40;
-  const PAL_LAB = PALETTE.map((p) => {
+  let PAL_LAB = [], PAL_CLASH = [];
+  function palMath() {
+  PAL_LAB = PALETTE.map((p) => {
     const [r, g, b] = [1, 3, 5].map((i) => parseInt(p.hex.substr(i, 2), 16) / 255).map((c) => (c > 0.04045 ? ((c + 0.055) / 1.055) ** 2.4 : c / 12.92));
     const f = (t) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
     const x = f((r * 0.4124 + g * 0.3576 + b * 0.1805) / 0.95047), y = f(r * 0.2126 + g * 0.7152 + b * 0.0722), z = f((r * 0.0193 + g * 0.1192 + b * 0.9505) / 1.08883);
     return [116 * y - 16, 500 * (x - y), 200 * (y - z)];
   });
-  const PAL_CLASH = PAL_LAB.map((a) => PAL_LAB.map((b) => Math.max(0, LOOKALIKE - Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]))));
+  PAL_CLASH = PAL_LAB.map((a) => PAL_LAB.map((b) => Math.max(0, LOOKALIKE - Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]))));
+  }
+  palMath();
   // Pick a palette color for each patch (returns palette indexes, one per patch).
   function colorOrder(N, reg, rng) {
     const order = PALETTE.map((_, i) => i);
@@ -295,7 +410,7 @@
       const rng = E.mulberry32(puzzle.seed ^ 0x9e3779b9);
       const order = colorOrder(N, puzzle.regions, rng);
       G = {
-        spec, puzzle, N, reg: puzzle.regions,
+        spec, puzzle, N, reg: puzzle.regions, scrapCell: scrapCellFor(spec, puzzle), scrapGot: null,
         colors: order.slice(0, N).map((i) => PALETTE[i]),
         units: E.buildUnits(N, puzzle.regions),
         state: new Array(N * N).fill(OPEN),
@@ -454,6 +569,7 @@
     const placed = step ? step.filter((s) => s.to === JASPER) : [];
     if (step && step.length) sfx(placed.length ? 'place' : step.some((s) => s.to === OUT) ? 'mark' : 'erase');
     if (placed.length && save.settings.vibrate && navigator.vibrate) navigator.vibrate(12);
+    if (G.scrapCell >= 0 && placed.some((p) => p.i === G.scrapCell)) grantScrap(G.scrapCell);
     saveCurrent();
     checkWin();
   }
@@ -805,10 +921,12 @@
       const chip = (got, was, label) => '<span class="wt-goal' + (got || was ? ' got' : '') + (got && !was ? ' new' : '') + '"><i>' + (got || was ? '✓' : '') + '</i>' + label + '</span>';
       wt.innerHTML = '<div class="wt-head only">' + treatSVG('treat inline-treat') + '<b>' + (tr.gained > 0 ? '+' + tr.gained + ' treat' + (tr.gained === 1 ? '' : 's') : 'No new treats') + '</b></div>';
     }
+    if (scrapAway) scrapAway(true);
     const ub = $('#win-badges');
     $('#win-rival').innerHTML = '';
-    ub.innerHTML = (info.unlocked || []).length ? '<small class="wb-label">New achievement' + (info.unlocked.length > 1 ? 's' : '') + '</small><div class="wb-chips">' + info.unlocked.map((a) => '<span class="win-badge"><i>' + a.icon + '</i><b>' + a.name + '</b></span>').join('') + '</div>' : '';
-    $('#win').classList.toggle('busy', !!(info.milestone || (info.unlocked || []).length));
+    const jr = G.scrapGot ? '<button class="win-journal" data-action="journal-read"><span>📜</span><b>New journal scrap</b><small>Read it now</small></button>' : '';
+    ub.innerHTML = jr + ((info.unlocked || []).length ? '<small class="wb-label">New achievement' + (info.unlocked.length > 1 ? 's' : '') + '</small><div class="wb-chips">' + info.unlocked.map((a) => '<span class="win-badge"><i>' + a.icon + '</i><b>' + a.name + '</b></span>').join('') + '</div>' : '');
+    $('#win').classList.toggle('busy', !!(info.milestone || (info.unlocked || []).length || G.scrapGot));
     $('#win-stars').innerHTML = [1, 2, 3].map((n) => '<span class="' + (n <= stars ? '' : 'off') + '">★</span>').join('');
     $('#win-time').textContent = fmtTime(G.elapsed);
     $('#win-hints').textContent = G.hints;
@@ -899,6 +1017,7 @@
     window.scrollTo(0, 0);
   }
   function goHome() {
+    if (scrapAway) scrapAway(true);
     $('#win').hidden = true;
     if (G && !G.done) saveCurrent();
     renderHome();
@@ -1055,10 +1174,15 @@
     let r;
     if (left.length && Math.random() < .5) { const id = left[Math.floor(Math.random() * left.length)]; r = { type: 'cosmetic', id, name: pool[id] }; save.room.owned.push(id); }
     else { r = { type: 'treats', amount: 1 + Math.floor(Math.random() * 50) }; save.chestTreats = (save.chestTreats || 0) + r.amount; }
-    r.at = todayStr(); save.chests[k] = r; persist();
+    // the first toy box opened after Looks arrived also holds a free background
+    const L = looksSave(), gift = !L.gift && !L.owned.includes(GIFT_LOOK);
+    if (gift) { L.gift = true; L.owned.push(GIFT_LOOK); L.isNew = true; r.look = GIFT_LOOK; }
+    r.at = todayStr(); save.chests[k] = r; persist(); looksBadge();
     sfx('win');
+    const giftHtml = gift ? '<p style="margin-bottom:8px">…and a new look:</p><div class="gift-look bgp bgp-' + GIFT_LOOK + '"></div><p><b>' + lookItem('bg', GIFT_LOOK).name + ' background</b></p>' : '';
     openModal('<div class="chest-open">' + CHEST_SVG + '<div class="chest-burst"></div></div><h2>' + (r.type === 'treats' ? '+' + r.amount + ' treats!' : r.name + '!') + '</h2><p>' +
-      (r.type === 'treats' ? 'Added to Jasper\'s treat jar for the shop. You have <b>' + treatJar() + '</b> to spend.' : 'A new cosmetic for Jasper. It is waiting in Jasper\'s Room.') + '</p>' + actions([['Yay!', 'close-modal', 'primary']]));
+      (r.type === 'treats' ? 'Added to Jasper\'s treat jar for the shop. You have <b>' + treatJar() + '</b> to spend.' : 'A new cosmetic for Jasper. It is waiting in Jasper\'s Room.') + '</p>' + giftHtml +
+      (gift ? actions([['Try it on', 'looks-try', 'primary'], ['Later', 'close-modal', 'ghost']]) + '<p class="gift-hint">Change it anytime from the ☰ menu → Looks</p>' : actions([['Yay!', 'close-modal', 'primary']])));
     renderLevels();
   }
 
@@ -1821,6 +1945,17 @@
       case 'howto': $('#drop').hidden = true; return openHowTo();
       case 'menu': { const d = $('#drop'), open = d.hidden; d.hidden = !open; $('#menu-btn').setAttribute('aria-expanded', open); return; }
       case 'settings': $('#drop').hidden = true; return openSettings();
+      case 'looks': $('#drop').hidden = true; return openLooks();
+      case 'journal': $('#drop').hidden = true; return openJournal();
+      case 'journal-read': $('#win').hidden = true; return openJournal(G && G.scrapGot ? G.scrapGot.page : undefined);
+      case 'jr-prev': return journalTurn(-1);
+      case 'jr-next': return journalTurn(1);
+      case 'jr-go': return journalTurn(+btn.dataset.p - jrCur);
+      case 'looks-try': closeModal(); return openLooks(GIFT_LOOK);
+      case 'looks-tab': looksTab = btn.dataset.tab; looksSel = null; return renderLooks();
+      case 'looks-pick': looksSel = btn.dataset.look; return renderLooks();
+      case 'looks-use': return looksUse();
+      case 'looks-buy': return looksBuy();
       case 'home': return goHome();
       case 'undo': return undo();
       case 'hint': return showHint();
@@ -1897,13 +2032,164 @@
     else document.documentElement.setAttribute('data-theme', th);
     const dark = th === 'dark' || (th === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
     const meta = document.querySelector('meta[name=theme-color]');
-    if (meta) meta.content = dark ? '#241D18' : '#E9DDCA';
     document.documentElement.classList.toggle('dark', dark);
+    if (meta) meta.content = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || (dark ? '#241D18' : '#E9DDCA');
   }
+  function looksSave() {
+    const d = { owned: ['paws', 'classic'], bg: 'paws', pal: 'classic', gift: false, isNew: false };
+    save.looks = Object.assign(d, save.looks || {});
+    for (const id of ['paws', 'classic']) if (!save.looks.owned.includes(id)) save.looks.owned.push(id);
+    if (!LOOKS.pal.some((p) => p.id === save.looks.pal)) save.looks.pal = 'classic';
+    if (!LOOKS.bg.some((p) => p.id === save.looks.bg)) save.looks.bg = 'paws';
+    return save.looks;
+  }
+  function applyLooks() {
+    const L = looksSave(), html = document.documentElement;
+    if (L.bg && L.bg !== 'paws' && LOOKS.bg.some((b) => b.id === L.bg)) html.setAttribute('data-bg', L.bg); else html.removeAttribute('data-bg');
+    const pal = LOOKS.pal.find((p) => p.id === L.pal) || LOOKS.pal[0];
+    PALETTE.splice(0, PALETTE.length, ...pal.colors); palMath();
+    applyTheme(); looksBadge();
+  }
+  function looksBadge() {
+    const isNew = !!(save.looks && save.looks.isNew);
+    journalBadge();
+    const mb = $('#menu-btn'); if (mb) mb.classList.toggle('has-new', isNew || !!(save.journal && save.journal.isNew));
+    const row = $('#drop-looks'); if (!row) return;
+    row.classList.toggle('is-new', isNew);
+    const tag = row.querySelector('.new-tag'); if (isNew && !tag) row.insertAdjacentHTML('beforeend', '<span class="new-tag">New</span>'); if (!isNew && tag) tag.remove();
+    const tip = $('#drop-tip'); if (isNew && !tip) row.insertAdjacentHTML('afterend', '<div class="drop-tip" id="drop-tip">Your new background is waiting here 🧶</div>'); if (!isNew && tip) tip.remove();
+  }
+  // ---------------------------------------------------------------- Looks screen
+  let looksTab = 'bg', looksSel = null;
+  function openLooks(pickId) {
+    const L = looksSave(); L.isNew = false; persist(); looksBadge();
+    if (pickId) { looksTab = LOOKS.bg.some((b) => b.id === pickId) ? 'bg' : 'pal'; looksSel = pickId; }
+    else looksSel = looksTab === 'bg' ? L.bg : L.pal;
+    renderLooks(); showScreen('looks');
+  }
+  const lookItem = (tab, id) => LOOKS[tab].find((x) => x.id === id);
+  function miniBoard(colors) {
+    const reg = [0, 0, 1, 1, 2, 0, 3, 1, 2, 2, 3, 3, 4, 4, 2, 5, 3, 4, 6, 6, 5, 5, 4, 6, 6], xs = [1, 5, 8, 11, 13, 17, 22];
+    return '<div class="mini-board">' + reg.map((r, i) => '<i style="background:' + colors[r % colors.length].hex + '"' + (xs.includes(i) ? ' class="x"' : '') + '></i>').join('') + '</div>';
+  }
+  function renderLooks() {
+    const L = looksSave(), tab = looksTab, list = LOOKS[tab];
+    if (!lookItem(tab, looksSel)) looksSel = tab === 'bg' ? L.bg : L.pal;
+    const sel = lookItem(tab, looksSel), owned = L.owned.includes(sel.id), using = (tab === 'bg' ? L.bg : L.pal) === sel.id, bal = treatJar();
+    $('#looks-bal').textContent = '🍪 ' + bal + ' treats';
+    const bgId = tab === 'bg' ? sel.id : L.bg, colors = tab === 'pal' ? sel.colors : PALETTE;
+    let act;
+    if (using) act = '<button class="btn ghost" disabled>Using this one</button>';
+    else if (owned) act = '<button class="btn primary" data-action="looks-use">Use this ' + (tab === 'bg' ? 'background' : 'color set') + '</button>';
+    else act = '<button class="btn primary" data-action="looks-buy"' + (bal < sel.price ? ' disabled' : '') + '>Buy for 🍪 ' + sel.price + '</button>';
+    const note = !owned && bal < sel.price ? 'You need ' + (sel.price - bal) + ' more treats. Solve levels to earn them.' : '';
+    $('#looks-body').innerHTML =
+      '<div class="looks-seg" role="tablist"><button data-action="looks-tab" data-tab="bg" class="' + (tab === 'bg' ? 'on' : '') + '">Backgrounds</button><button data-action="looks-tab" data-tab="pal" class="' + (tab === 'pal' ? 'on' : '') + '">Colors</button></div>' +
+      '<div class="looks-preview bgp bgp-' + bgId + '">' + miniBoard(colors) + '</div>' +
+      '<p class="looks-name">' + sel.name + '</p><div class="looks-act">' + act + '</div><p class="looks-note">' + note + '</p>' +
+      '<div class="looks-grid">' + list.map((it) => {
+        const u = (tab === 'bg' ? L.bg : L.pal) === it.id, o = L.owned.includes(it.id);
+        const sw = tab === 'bg' ? '<div class="sw bgp bgp-' + it.id + '"></div>' : '<div class="sw strip">' + it.colors.map((c) => '<i style="background:' + c.hex + '"></i>').join('') + '</div>';
+        return '<button class="look-item' + (it.id === sel.id ? ' sel' : '') + '" data-action="looks-pick" data-look="' + it.id + '">' + sw + it.name + '<small class="' + (u ? 'using' : o ? 'owned' : '') + '">' + (u ? 'Using' : o ? 'Owned' : '🍪 ' + it.price) + '</small></button>';
+      }).join('') + '</div>';
+  }
+  function looksUse() {
+    const L = looksSave(), id = looksSel;
+    if (!L.owned.includes(id)) return;
+    if (looksTab === 'bg') L.bg = id; else L.pal = id;
+    persist(); applyLooks(); renderLooks();
+    toast(looksTab === 'bg' ? 'New background on' : 'New colors on the next board');
+  }
+  function looksBuy() {
+    const L = looksSave(), it = lookItem(looksTab, looksSel);
+    if (!it || L.owned.includes(it.id)) return;
+    if (treatJar() < it.price) return toast('Not enough treats yet');
+    save.room.spent = (save.room.spent || 0) + it.price; L.owned.push(it.id);
+    sfx('win'); looksUse();
+  }
+  // ---------------------------------------------------------------- Jasper's Journal (a book, one page at a time)
+  function journalBadge() {
+    const J = journalSave(), row = $('#drop-journal');
+    if (!row) return;
+    const n = scrapsFound();
+    row.querySelector('small').textContent = n ? n + ' of ' + SCRAPS.length + ' scraps found' : 'Find scraps as you play';
+    row.classList.toggle('is-new', !!J.isNew);
+    const tag = row.querySelector('.new-tag'); if (J.isNew && !tag) row.insertAdjacentHTML('beforeend', '<span class="new-tag">New</span>'); if (!J.isNew && tag) tag.remove();
+  }
+  let jrCur = 0, jrGlow = null;
+  function openJournal(page) {
+    const J = journalSave();
+    jrGlow = J.newId; J.isNew = false; J.newId = null;
+    if (page === undefined && jrGlow) { const sc = SCRAPS.find((x) => x.id === jrGlow); if (sc) page = sc.page; }
+    jrCur = Math.max(0, Math.min(JOURNAL.PAGES.length - 1, page === undefined ? J.page || 0 : page));
+    persist(); looksBadge();
+    renderJournal(0); showScreen('journal');
+  }
+  const tilt = (id) => ((E.hashSeed('tilt-' + id) % 5) - 2) * 0.6;
+  const PAW = '<svg viewBox="0 0 24 24" fill="#a68a68"><ellipse cx="12" cy="16" rx="5" ry="4.2"/><circle cx="6" cy="10" r="2.2"/><circle cx="10" cy="6.5" r="2.2"/><circle cx="14" cy="6.5" r="2.2"/><circle cx="18" cy="10" r="2.2"/></svg>';
+  function journalPageHTML(pi) {
+    const p = JOURNAL.PAGES[pi], got = journalSave().got;
+    const have = p.scraps.map((sc) => sc[0] in got);
+    const folio = '<div class="jr-folio">— ' + (pi + 1) + ' —</div>';
+    if (!have.some(Boolean)) return '<div class="jr-blank">' + PAW + 'This page is still blank<small>Keep playing to find it</small></div>' + folio;
+    let h = '<h4>' + escapeHtml(p.title) + '</h4>';
+    const glow = (id) => (id === jrGlow ? ' glow' : '');
+    if (p.kind === 'draw') {
+      const svg = JOURNAL.DRAW[p.draw] || '';
+      h += '<div class="jr-draw">' + (have[0] ? '<i class="tape l"></i><i class="tape r"></i>' : '') + p.scraps.map((sc, k) => '<div class="jr-half ' + (k ? 'bot' : 'top') + (have[k] ? glow(sc[0]) : ' missing') + '">' + (have[k] ? svg : '') + '</div>').join('') + '</div>';
+      h += have[1] ? '<p class="jr-caption">' + escapeHtml(p.caption) + '</p>' : '<p class="jr-caption faint">the other half is still missing…</p>';
+    } else {
+      h += p.scraps.map((sc, k) => have[k] ? '<div class="jr-scrap' + glow(sc[0]) + '" style="--r:' + tilt(sc[0]) + 'deg"><i class="tape"></i><div class="jr-tear">' + escapeHtml(sc[1]) + '</div></div>' : '<div class="jr-gap">a scrap is missing here</div>').join('');
+    }
+    return h + folio;
+  }
+  let jrBusy = false;
+  function renderJournal(dir) {
+    const J = journalSave(), n = JOURNAL.PAGES.length;
+    J.page = jrCur;
+    const found = scrapsFound();
+    $('#jr-count').textContent = found + ' of ' + SCRAPS.length + ' scraps found';
+    $('#jr-where').textContent = 'Page ' + (jrCur + 1) + ' of ' + n;
+    $('#jr-prev').disabled = jrCur === 0; $('#jr-next').disabled = jrCur === n - 1;
+    $('#jr-hint').textContent = found ? '' : 'Every few levels, one of the squares where Jasper belongs hides a scrap of his journal. Place him there to find it.';
+    const pg = $('#jr-page'), html = journalPageHTML(jrCur);
+    if (!dir || matchMedia('(prefers-reduced-motion: reduce)').matches) { pg.innerHTML = html; return; }
+    // a real page turn: the page swings over the spine on the left
+    jrBusy = true;
+    const leaf = document.createElement('div');
+    leaf.className = 'jr-page flip' + (dir < 0 ? ' back' : '');
+    if (dir > 0) { leaf.innerHTML = pg.innerHTML; pg.innerHTML = html; } else leaf.innerHTML = html;
+    pg.parentNode.appendChild(leaf);
+    sfx('erase');
+    setTimeout(() => { if (dir < 0) pg.innerHTML = html; leaf.remove(); jrBusy = false; }, 640);
+  }
+  function journalTurn(d) {
+    if (jrBusy) return;
+    const to = Math.max(0, Math.min(JOURNAL.PAGES.length - 1, jrCur + d));
+    if (to === jrCur) return;
+    jrCur = to; persist(); renderJournal(d > 0 ? 1 : -1);
+  }
+  (function journalSwipe() {
+    const book = $('#jr-book');
+    if (!book) return;
+    let sx = null, sy = 0;
+    book.addEventListener('pointerdown', (e) => { sx = e.clientX; sy = e.clientY; });
+    book.addEventListener('pointerup', (e) => {
+      if (sx === null) return;
+      const dx = e.clientX - sx, dy = e.clientY - sy; sx = null;
+      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) return journalTurn(dx < 0 ? 1 : -1);
+      // a tap near the right or left edge of the page turns it, like a real book
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) {
+        const r = book.getBoundingClientRect(), fx = (e.clientX - r.left) / r.width;
+        if (fx > 0.72) journalTurn(1); else if (fx < 0.28) journalTurn(-1);
+      }
+    });
+    book.addEventListener('pointercancel', () => { sx = null; });
+  })();
   if (window.matchMedia) { try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme); } catch (e) { /* old browser */ } }
 
-  migrateBest(); migrateChests(); persist();
-  applyTheme();
+  migrateBest(); migrateChests(); looksSave(); journalSave(); persist();
+  applyLooks();
   applyHoliday();
   lbSync().then((ok) => { if (ok) renderHome(); });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) lbSync().then((ok) => { if (ok && $('#screen-home').classList.contains('active')) renderHome(); }); });
@@ -1915,5 +2201,5 @@
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
   // expose for debugging/tests
-  window.JasperDoku = { get game() { return G; }, startGame, levelSpec, findHint, save: () => save };
+  window.JasperDoku = { get game() { return G; }, startGame, levelSpec, findHint, save: () => save, scrapLevels: () => [...SCRAP_LEVELS].slice(0, 40) };
 })();

@@ -28,6 +28,8 @@ It's picked up automatically - the cartoon placeholder is only used until then.
 - 120+ levels growing from 5×5 to 10×10, with a "Level up!" celebration at each new board size
 - Puzzles get harder as you go: each board size starts gentle and ends hard, and "Tricky" smaller boards (which need the hardest moves) are mixed in from level 13
 - Look-alike colors (like pink and rose, or blue and sky) are kept from touching on every board
+- Looks (☰ menu): spend treats on board backgrounds (yarn, fishbowl, leaves, cozy blanket, starry night) and bold color sets (christmas, jewel box, candy shop, ocean, meadow, sunset, galaxy, autumn). The first toy box opened after this update also holds a free yarn background. Looks and Jasper's Room share one treat jar
+- Jasper's Journal (☰ menu): every 4-7 levels (fixed seed, never on golden levels) one square where Jasper belongs hides a torn scrap. Placing him there pops the scrap above the board for ~3 seconds (tap to tuck it away sooner). Only levels not beaten yet hold a scrap, so a player who is past some scrap levels starts finding them on the next one. Scraps fill a leather-bound book of 17 pages (thoughts, night walks and four sketches) that turns one page at a time. Pages live in `js/journal.js`; never rename a scrap id once shipped. A family photo page will be added later and loaded only after the family code is entered, never stored in this repo
 - Progress card on the home screen; All Levels screen with stars, best times and skipped levels
 - Daily Puzzle with a month calendar, current and best streak, and catch-up for missed days
 - 48 achievements in 7 sections (Levels, Skill, Speed, Daily, Golden, Rivals, Just for Fun), shown on the win screen as they unlock
