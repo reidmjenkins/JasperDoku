@@ -202,14 +202,14 @@ html:has(#screen-game.active), html:has(#screen-game.active) body { overflow: hi
 }
 .cell { position: relative; display: grid; place-items: center; cursor: pointer; overflow: visible; background-clip: padding-box; }
 .cell:active { opacity: .85; }
-.cell .mark { width: 32%; height: 32%; position: relative; opacity: .72; animation: markIn .16s ease-out; }
+.cell .mark { width: 100%; height: 100%; position: relative; animation: markIn .16s ease-out; filter: drop-shadow(0 0 1.5px rgba(60,50,40,.35)); }
 .cell .mark::before, .cell .mark::after {
-  content: ""; position: absolute; left: 50%; top: 50%; width: 100%; height: 10%; min-height: 2px;
-  background: #000; border-radius: 99px; transform: translate(-50%, -50%) rotate(45deg);
+  content: ""; position: absolute; left: 50%; top: 50%; width: 112%; height: 15%; min-height: 4px;
+  background: #fff; border-radius: 99px; transform: translate(-50%, -50%) rotate(45deg);
 }
 .cell .mark::after { transform: translate(-50%, -50%) rotate(-45deg); }
 @keyframes markIn { from { transform: scale(.5); opacity: 0; } }
-.cell.auto .mark { opacity: .36; animation: none; }
+.cell.auto .mark { opacity: .6; animation: none; }
 .cell .piece {
   position: relative; z-index: 1; overflow: hidden;
   width: 84%; height: 84%; border-radius: 50%; background: var(--piece-ring); padding: 2px;
@@ -728,6 +728,8 @@ html.dark .lp-node.locked { background: rgba(40,40,44,.78); color: rgba(255,255,
   -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 94%, transparent 100%); mask-image: linear-gradient(to bottom, #000 0, #000 94%, transparent 100%); }
 .lp-map-tile:first-child { -webkit-mask-image: none; mask-image: none; }
 .lp-map-cover { position: absolute; display: block; pointer-events: none; user-select: none; }
+.lp-map-cover.fade { -webkit-mask-image: linear-gradient(to bottom, #000 86.5%, transparent 100%); mask-image: linear-gradient(to bottom, #000 86.5%, transparent 100%); }
+.lp-map-seam { position: absolute; left: 0; width: 100%; display: block; pointer-events: none; user-select: none; }
 .level-path.map .lp-node { width: 54px; height: 54px; border: 3px solid #fff; box-shadow: 0 5px 0 rgba(0,0,0,.28), 0 6px 10px rgba(0,0,0,.25); }
 .level-path.map .lp-node.done { background: radial-gradient(circle at 40% 30%, #4FC7BF, #1F7F79); }
 .level-path.map .lp-node.golden { background: radial-gradient(circle at 40% 30%, #FFE69A, #E8A51F); }
