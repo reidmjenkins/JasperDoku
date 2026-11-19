@@ -571,7 +571,11 @@ function drawBed(c, kind) {
 
 // ---------- hats and neckwear, drawn in picture pixels on Jasper's head
 function fluff(c, x, y, r) { c.fillStyle = rg(c, x, y, 0, r, [[0, '#FFFFFF'], [.6, '#F4F1EC'], [1, 'rgba(225,220,212,0)']]); c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill(); }
-function drawHat(c, id, t) {
+// where his red reindeer nose goes in each side-on picture: [x, y, radius] in that picture's pixels
+const NOSES = { rig: [847, 137.5, 5], stand: [99.5, 158, 9.5], look: [284.1, 150, 8], sleep: [335, 190, 10.5], scratch: [145.1, 89, 6.5], stretch: [172.2, 245.5, 8.5] };
+const SCRF_NOSE = [[71.7, 73.8], [72.8, 65.2], [68.8, 49.8], [61.8, 42.2], [59.3, 29], [72.7, 51.8], [66.8, 58.3], [68.2, 61.8], [67.8, 91.7], [73.8, 60.3]];   // one per scratching frame
+function rudolph(c, n) { ball(c, n[0], n[1], n[2], '#FF4A4A', '#9A1010'); }
+function drawHat(c, id, t, noNose) {
   const { x, y } = HEADTOP;
   if (id === 'santa') {
     c.beginPath(); c.moveTo(x - 54, y + 8); c.quadraticCurveTo(x - 12, y - 74, x + 46, y - 52); c.quadraticCurveTo(x + 30, y - 22, x + 52, y + 8); c.closePath();
@@ -587,7 +591,7 @@ function drawHat(c, id, t) {
       c.beginPath(); c.moveTo(x + s * 30, y + 10); c.quadraticCurveTo(x + s * 36, y - 20, x + s * 46, y - 52); c.moveTo(x + s * 40, y - 30); c.quadraticCurveTo(x + s * 54, y - 34, x + s * 66, y - 46); c.moveTo(x + s * 44, y - 46); c.lineTo(x + s * 32, y - 70); c.stroke();
       c.strokeStyle = 'rgba(255,240,220,.25)'; c.lineWidth = 2.5; c.beginPath(); c.moveTo(x + s * 28, y + 6); c.quadraticCurveTo(x + s * 34, y - 20, x + s * 43, y - 50); c.stroke();
     }
-    ball(c, x, y + 103, 9, '#FF4A4A', '#9A1010');
+    if (!noNose) rudolph(c, [x - 7, y + 78, 8]);   // on the tip of his nose in the front-facing picture
   }
   if (id === 'bow') {
     for (const s of [-1, 1]) { c.fillStyle = rg(c, x + 44 + s * 12, y + 8, 2, 22, [[0, '#FFB3D0'], [.6, '#F06F9E'], [1, '#B83A6A']]); c.beginPath(); c.moveTo(x + 44, y + 8); c.quadraticCurveTo(x + 44 + s * 30, y - 22, x + 44 + s * 28, y + 10); c.quadraticCurveTo(x + 44 + s * 30, y + 34, x + 44, y + 8); c.fill(); }
@@ -819,12 +823,13 @@ function drawScarfBand(c, n, t) {
   else { tail(len * .14, len * .9, .08); tail(len * .3, len * .7, -.06); knit(-len / 2, -th / 2, len, th, th / 2); }
   c.restore();
 }
-function wearables(c, ear, t, scarf, neck) {
+function wearables(c, ear, t, scarf, neck, nose) {
   if (scarf && neck && S.slot.neck === 'scarf') drawScarfBand(c, neck, t);
   const [mx, my, dist, ang] = ear;
   c.save(); c.translate(mx, my); c.rotate(ang); c.scale(dist / 106, dist / 106); c.translate(-191, -12);
-  if (S.slot.hat) drawHat(c, S.slot.hat, t);
+  if (S.slot.hat) drawHat(c, S.slot.hat, t, !!nose);
   c.restore();
+  if (nose && S.slot.hat === 'antlers') rudolph(c, nose);
 }
 const SHADOW = { sit: [46, 0], stand: [42, 0], look: [40, 0], walk: [58, 0], sleep: [52, 0], scratch: [0, 0], stretch: [0, 0] };
 function drawPose(c, t, pose, face, x, y, alpha, lift) {
@@ -880,7 +885,7 @@ function drawPose(c, t, pose, face, x, y, alpha, lift) {
     drawLeg(LEG.hind, 'hUN', 'hLN', 'hJN', ph); drawLeg(LEG.front, 'fUN', 'fLN', 'fJN', ph + .25);
     if (ready(RIG_IMG.body)) c.drawImage(RIG_IMG.body, 0, bob, mt.w, mt.h);
     c.translate(0, bob);
-    wearables(c, mt.ear, t, true, [mt.neck[0], mt.neck[1], 92, .95, 'side']);
+    wearables(c, mt.ear, t, true, [mt.neck[0], mt.neck[1], 92, .95, 'side'], NOSES.rig);
     c.restore(); c.restore(); return;
   }
   if (pose === 'scratch') {
@@ -893,7 +898,8 @@ function drawPose(c, t, pose, face, x, y, alpha, lift) {
     const ea = mt.ears[sp.a], eb = mt.ears[sp.b], mix = (p, q2) => p + (q2 - p) * sp.w;
     const e = [mix(ea[0] + hipMean - SCR_HIP[sp.a], eb[0] + hipMean - SCR_HIP[sp.b]), mix(ea[1], eb[1]), ea[2], ea[3]];
     if (S.slot.neck === 'scarf') drawScarfBand(c, [e[0] + 2, e[1] + 50, 40, .22, 'front'], t);
-    if (S.slot.hat) { c.save(); c.translate(e[0], e[1]); c.rotate(e[3]); c.scale(e[2] / 106, e[2] / 106); c.translate(-191, -12); drawHat(c, S.slot.hat, t); c.restore(); }
+    if (S.slot.hat) { c.save(); c.translate(e[0], e[1]); c.rotate(e[3]); c.scale(e[2] / 106, e[2] / 106); c.translate(-191, -12); drawHat(c, S.slot.hat, t, true); c.restore();
+      if (S.slot.hat === 'antlers') { const na = SCRF_NOSE[sp.a], nb = SCRF_NOSE[sp.b]; rudolph(c, [mix(na[0] + hipMean - SCR_HIP[sp.a], nb[0] + hipMean - SCR_HIP[sp.b]), mix(na[1], nb[1]), 3.5]); } }
     c.restore();
     c.restore(); return;
   }
@@ -909,7 +915,7 @@ function spriteAt(c, t, name, face, x, y, alpha, m, breathe, sOverride) {
   c.save(); c.globalAlpha *= alpha;
   c.translate(x, y); c.scale(s * fl, s * (1 + (breathe || 0)) * (name === 'flop' ? .9 : 1)); c.translate(-r.fx, -r.fy);
   c.drawImage(im, 0, 0, r.w, r.h);
-  if (r.ear && name !== 'flop') wearables(c, r.ear, t, true, NECKS[name]);
+  if (r.ear && name !== 'flop') wearables(c, r.ear, t, true, NECKS[name], NOSES[name]);
   c.restore();
 }
 function drawJasper(c, t) {

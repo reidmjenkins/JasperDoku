@@ -158,9 +158,9 @@
   })();
   const isGolden = (n) => GOLDEN.has(n);
   // the regular board size for a level number (golden levels don't change the size path)
-  const baseSize = (n) => (n <= 4 ? 5 : n <= 12 ? 6 : n <= 28 ? 7 : n <= 50 ? 8 : n <= 80 ? 9 : 10);
+  const baseSize = (n) => (n <= 4 ? 5 : n <= 15 ? 6 : n <= 50 ? 7 : n <= 150 ? 8 : n <= 400 ? 9 : 10);
   // first and last level that share a regular board size
-  const sizeStretch = (n) => { const s = baseSize(n); let a = n, b = n; while (a > 1 && baseSize(a - 1) === s) a--; while (b < 400 && baseSize(b + 1) === s) b++; return [a, b]; };
+  const sizeStretch = (n) => { const s = baseSize(n); let a = n, b = n; while (a > 1 && baseSize(a - 1) === s) a--; while (b < 1000 && baseSize(b + 1) === s) b++; return [a, b]; };
   // board size for a tricky small level, or 0 for a regular one (never two tricky levels in a row)
   const trickyMemo = new Map();
   function trickySize(n) {
@@ -179,14 +179,28 @@
     if (isGolden(n)) return { size: 8, maxTier: 4, minTier: 2, golden: true };
     const size = baseSize(n);
     if (n <= 12) return { size, maxTier: n <= 2 ? 1 : n <= 6 ? 2 : n <= 12 ? 3 : 4, minTier: 0 };
-    // From level 13 on, puzzles get harder as you go: most levels use the current board
-    // size, and some are smaller boards made tricky (they need the hardest kinds of moves).
-    const small = trickySize(n), pickHard = Math.min(10, 3 + Math.floor(n / 15));
-    if (small) return { size: small, maxTier: 4, minTier: 4, pick: pickHard, tricky: true };
-    // regular board: starts gentle at each new size and ends on the hardest puzzles
+    // From level 13 on, puzzles get harder slowly, all the way up to level 1000 (the hardest).
+    // Most levels use the current board size; some are smaller boards made tricky.
+    // 0 at level 13, 1 at level 1000; the square root makes it climb quickly early on, then keep creeping up
+    const g = Math.sqrt(Math.min(1, (n - 13) / 987));
+    const small = trickySize(n);
+    if (small) return g < 0.2 ? { size: small, maxTier: 4, minTier: 3, pick: 2, tricky: true }
+      : { size: small, maxTier: 4, minTier: 4, pick: 2 + Math.round(g * 10), tricky: true };
+    // regular board: overall difficulty climbs with the level, with a small lift toward the end of each board size
     const [a, b] = sizeStretch(n), p = (n - a) / Math.max(1, b - a);
-    const minTier = Math.max(n >= 20 ? 3 : 2, p < 0.34 ? 2 : p < 0.67 ? 3 : 4);
-    return { size, maxTier: 4, minTier, pick: p >= 0.67 ? 3 : 1 };
+    return Object.assign({ size }, difficultyAt(Math.min(1, g + 0.05 * p)));
+  }
+  // d runs 0 (gentle) to 1 (hardest). maxTier 3 never needs the trickiest move; minTier makes it required;
+  // pick makes several puzzles and keeps the one that takes the most hard work.
+  function difficultyAt(d) {
+    if (d < 0.05) return { maxTier: 3, minTier: 2, pick: 1 };
+    if (d < 0.12) return { maxTier: 3, minTier: 2, pick: 3 };
+    if (d < 0.22) return { maxTier: 4, minTier: 2, pick: 1 };
+    if (d < 0.35) return { maxTier: 4, minTier: 3, pick: 2 };
+    if (d < 0.5) return { maxTier: 4, minTier: 3, pick: 4 };
+    if (d < 0.65) return { maxTier: 4, minTier: 4, pick: 2 };
+    if (d < 0.8) return { maxTier: 4, minTier: 4, pick: 5 };
+    return { maxTier: 4, minTier: 4, pick: 8 + Math.round((d - 0.8) * 40) };
   }
   function levelSpec(n) { return Object.assign({ mode: 'level', id: n, seed: 'level-' + n }, levelConfig(n)); }
 
@@ -421,7 +435,9 @@
       };
       // resume a half-finished board
       const cur = (save.progress || {})[specKey(spec)];
-      if (cur && cur.state && cur.state.length === N * N) {
+      // only if it's the same puzzle (older saves have no fingerprint: then every placed Jasper must fit this puzzle)
+      const samePuzzle = cur && (cur.pz !== undefined ? cur.pz === E.hashSeed(puzzle.regions.join(',')) : !!cur.state && cur.state.every((v, i) => v !== JASPER || puzzle.solution[Math.floor(i / N)] === i % N));
+      if (cur && samePuzzle && cur.state && cur.state.length === N * N) {
         G.state = cur.state.slice(); G.elapsed = cur.elapsed || 0; G.hints = cur.hints || 0; G.wrongPlaced = cur.wrongPlaced || 0; G.lives = cur.lives === undefined ? G.maxLives : Math.min(cur.lives, G.maxLives); G.knownWrong = cur.knownWrong || []; G.restarted = !!cur.restarted;
       }
       saveCurrent();
@@ -438,7 +454,7 @@
     save.progress = save.progress || {};
     const key = specKey(G.spec);
     delete save.progress[key]; // re-insert so it counts as most recent
-    save.progress[key] = { state: G.state, elapsed: G.elapsed, hints: G.hints, wrongPlaced: G.wrongPlaced, lives: G.lives, knownWrong: G.knownWrong, restarted: !!G.restarted };
+    save.progress[key] = { state: G.state, elapsed: G.elapsed, hints: G.hints, wrongPlaced: G.wrongPlaced, lives: G.lives, knownWrong: G.knownWrong, restarted: !!G.restarted, pz: E.hashSeed(G.reg.join(',')) };
     const keys = Object.keys(save.progress);
     while (keys.length > 8) delete save.progress[keys.shift()]; // keep the 8 most recent boards
     persist();
@@ -1061,7 +1077,7 @@
     const size = baseSize(save.level);
     let first = save.level, last = save.level;
     while (first > 1 && baseSize(first - 1) === size) first--;
-    while (baseSize(last + 1) === size && last < 400) last++;
+    while (baseSize(last + 1) === size && last < 1000) last++;
     const pct = size === 10 ? 100 : Math.round(((save.level - first) / (last - first + 1)) * 100);
     $('#home-bar').style.width = Math.max(4, pct) + '%';
     $('#home-next').textContent = size === 10

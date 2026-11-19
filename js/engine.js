@@ -310,13 +310,13 @@
   function logicSolve(N, reg, maxTier, startState) {
     const units = buildUnits(N, reg);
     const state = startState ? startState.slice() : new Array(N * N).fill(OPEN);
-    let hardest = 0, steps = 0, hard = 0;
+    let hardest = 0, steps = 0, hard = 0, score = 0;   // score: how much hard work it takes (the trickiest moves count triple)
     for (let guard = 0; guard < 2000; guard++) {
-      if (state.filter((s) => s === JASPER).length === N) return { solved: true, hardest, steps, hard, state };
+      if (state.filter((s) => s === JASPER).length === N) return { solved: true, hardest, steps, hard, score, state };
       const st = nextStep(N, reg, state, maxTier, units);
       if (!st || st.tier < 0) return { solved: false, hardest, steps, hard, state };
       hardest = Math.max(hardest, st.tier);
-      steps++; if (st.tier >= 3) hard++;
+      steps++; if (st.tier >= 3) hard++; score += st.tier >= 4 ? 3 : st.tier >= 3 ? 1 : 0;
       applyStep(state, st);
     }
     return { solved: false, hardest, steps, state };
@@ -325,7 +325,7 @@
   /*
    * Make a puzzle.
    * opts: { size, seed (string or number), maxTier (1-4), minTier (optional),
-   *         pick (optional: make this many good puzzles and keep the one with the most hard steps) }
+   *         pick (optional: make this many good puzzles and keep the one that takes the most hard work) }
    * Returns { size, regions, solution (col per row), hardest, seed }
    */
   function generate(opts) {
@@ -343,15 +343,16 @@
       if (!makeUnique(N, reg, queens, rng)) continue;
       const res = logicSolve(N, reg, maxTier);
       if (!res.solved) continue;
-      const puzzle = { size: N, regions: reg, solution: queens, hardest: res.hardest, hardSteps: res.hard, seed: seedNum };
+      const puzzle = { size: N, regions: reg, solution: queens, hardest: res.hardest, hardSteps: res.hard, score: res.score, seed: seedNum };
       if (res.hardest >= minTier) {
         if (pick <= 1) return puzzle;
-        if (!best || res.hard > best.hardSteps) best = puzzle;
+        if (!best || res.score > best.score) best = puzzle;
         if (++found >= pick) return best;
         continue;
       }
       if (!fallback) fallback = puzzle;
-      if (attempt > 60 && (best || fallback)) return best || fallback;
+      // give up early once something usable is found; asking for more picks allows a longer search
+      if (attempt > Math.min(360, 60 + 15 * (pick - 1)) && (best || fallback)) return best || fallback;
     }
     if (best || fallback) return best || fallback;
     throw new Error('Could not generate a puzzle');
