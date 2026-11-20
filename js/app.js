@@ -1160,7 +1160,8 @@
     yarn: 'Yarn ball', mouse: 'Toy mouse', fire: 'Cozy fire',
   };
   const WINTER_COSMETICS = { santa: 'Santa hat', antlers: 'Reindeer antlers', scarf: 'Cozy scarf', tree: 'Christmas tree', lights: 'String lights', gifts: 'Gift boxes',
-    'stock-R': 'Stocking R', 'stock-K': 'Stocking K', 'stock-J': 'Stocking J', 'stock-L': 'Stocking L' };
+    'stock-R': 'Stocking R', 'stock-K': 'Stocking K', 'stock-J': 'Stocking J', 'stock-L': 'Stocking L',
+    'stock-B': 'Stocking B', 'stock-A': 'Stocking A', 'stock-J2': 'Reindeer stocking J' };
   const chestReady = (k) => save.level > k * CHEST_EVERY && !save.chests[k];
   const CHEST_SVG = '<svg viewBox="0 0 72 64" aria-hidden="true">' +
     // toys peeking out: feather wand, yarn ball, toy mouse
