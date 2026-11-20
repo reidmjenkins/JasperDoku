@@ -296,6 +296,15 @@
   function yesterdayStr() { const d = new Date(); d.setDate(d.getDate() - 1); return todayStr(d); }
   // day number from a 'YYYY-MM-DD' string (used to share streaks on the leaderboard)
   const dayNum = (ds) => { const [y, m, d] = ds.split('-').map(Number); return Math.round((Date.UTC(y, m - 1, d) - Date.UTC(2026, 0, 1)) / 864e5); };
+  // weeks run Monday to Sunday; a week is named by the day number of its Monday (Jan 1 2026 was a Thursday)
+  const weekOf = (ds) => { const dn = dayNum(ds || todayStr()); return dn - (((dn + 3) % 7) + 7) % 7; };
+  function weekTreats() { const w = save.week || {}; return w.id === weekOf() ? w.n || 0 : 0; }
+  function addWeekTreats(n) {
+    if (!(n > 0)) return;
+    const wk = weekOf();
+    if (!save.week || save.week.id !== wk) save.week = { id: wk, n: 0 };
+    save.week.n += n;
+  }
   const STREAK_REWARDS = [[3, 5], [7, 15], [14, 30], [30, 60], [60, 100], [100, 150]];
   function nextStreakReward(n) { return STREAK_REWARDS.find(([d]) => d > n) || null; }
   function grantStreakReward(n) {
@@ -931,19 +940,18 @@
     const wsk = $('#win-streak');
     wsk.hidden = !info.streakUp;
     if (info.streakUp) { const nx = nextStreakReward(info.streakUp); wsk.innerHTML = FLAME + '<b>' + info.streakUp + '-day streak!</b>' + (info.streakBonus ? '<span class="streak-bonus">' + treatSVG('treat inline-treat') + '+' + info.streakBonus + ' streak reward</span>' : '') + '<small>' + (nx ? (nx[0] - info.streakUp) + ' more day' + (nx[0] - info.streakUp === 1 ? '' : 's') + ' to +' + nx[1] + ' treats' : 'Kept alive for today') + '</small>'; }
-    const wt = $('#win-treats'), tr = info.treats;
-    wt.hidden = !tr;
-    if (tr) {
-      const chip = (got, was, label) => '<span class="wt-goal' + (got || was ? ' got' : '') + (got && !was ? ' new' : '') + '"><i>' + (got || was ? '✓' : '') + '</i>' + label + '</span>';
-      wt.innerHTML = '<div class="wt-head only">' + treatSVG('treat inline-treat') + '<b>' + (tr.gained > 0 ? '+' + tr.gained + ' treat' + (tr.gained === 1 ? '' : 's') : 'No new treats') + '</b></div>';
-    }
+    $('#win-treats').hidden = true;
     if (scrapAway) scrapAway(true);
     const ub = $('#win-badges');
     $('#win-rival').innerHTML = '';
     const jr = G.scrapGot ? '<button class="win-journal" data-action="journal-read"><span>📜</span><b>New journal scrap</b><small>Read it now</small></button>' : '';
     ub.innerHTML = jr + ((info.unlocked || []).length ? '<small class="wb-label">New achievement' + (info.unlocked.length > 1 ? 's' : '') + '</small><div class="wb-chips">' + info.unlocked.map((a) => '<span class="win-badge"><i>' + a.icon + '</i><b>' + a.name + '</b></span>').join('') + '</div>' : '');
     $('#win').classList.toggle('busy', !!(info.milestone || (info.unlocked || []).length || G.scrapGot));
-    $('#win-stars').innerHTML = [1, 2, 3].map((n) => '<span class="' + (n <= stars ? '' : 'off') + '">★</span>').join('');
+    // the treats won on this board (golden levels pay out more, all shown gold)
+    const tw = info.treats, won = tw ? tw.won : G.lives, slots = G.spec.golden ? won : G.maxLives;
+    $('#win-stars').classList.toggle('golden', !!G.spec.golden);
+    $('#win-stars').innerHTML = Array.from({ length: slots }, (_, k) => '<span class="' + (k < won ? '' : 'off') + '">' + treatSVG('treat') + '</span>').join('');
+    $('#win-stars').setAttribute('aria-label', won + ' treat' + (won === 1 ? '' : 's'));
     $('#win-time').textContent = fmtTime(G.elapsed);
     $('#win-hints').textContent = G.hints;
     const nd = G.spec.mode === 'daily' ? nextDailyN(G.spec.day) : 0;
@@ -1255,7 +1263,7 @@
       '<div class="group-label">Leaderboard</div>' +
       '<div class="group">' +
       '<label class="set-row input-row"><span class="label">Your name</span><input id="lb-name" maxlength="24" placeholder="Your name" value="' + escapeHtml(save.lb.name) + '" autocomplete="off"></label>' +
-      '<label class="set-row input-row"><span class="label">Family code</span><input id="lb-room" maxlength="40" placeholder="jasper-…" value="' + escapeHtml(save.lb.room) + '" autocomplete="off" autocapitalize="off" spellcheck="false"></label>' +
+      '<label class="set-row input-row"><span class="label">Family code</span><input id="lb-room" maxlength="40" placeholder="Ask for the code" value="' + escapeHtml(save.lb.room) + '" autocomplete="off" autocapitalize="off" spellcheck="false"></label>' +
       '<button class="set-row link-row" data-action="lb-join"><span class="label">' + (lbReady() ? 'Save & Sync' : 'Join Leaderboard') + '</span><span class="lb-status" id="lb-status">' + lbStatusText() + '</span></button>' +
       '</div>' +
       '<div class="group-foot">Use the same family code on both phones. Only your name and puzzle times are shared.</div>' +
@@ -1397,7 +1405,8 @@
     const prev = save.best[k] || { t: 0, g: 0 }, won = spec.golden ? (spec.firstRun && !G.restarted ? GOLD_FIRST : GOLD_LATER) : G.lives, next = { t: Math.max(prev.t, won), g: prev.g | bits };
     const before = k in save.best ? puzzleTreats(k, prev) : 0, after = puzzleTreats(k, next);
     save.best[k] = next;
-    return { gained: after - before, total: after, before, bestKept: next.t, bestGoals: bitCount(next.g), lives: G.lives, maxLives: G.maxLives, bits, prevBits: prev.g, goals, golden: !!spec.golden };
+    addWeekTreats(after - before);
+    return { won, gained: after - before, total: after, before, bestKept: next.t, bestGoals: bitCount(next.g), lives: G.lives, maxLives: G.maxLives, bits, prevBits: prev.g, goals, golden: !!spec.golden };
   }
   function totalStars() { return Object.values(save.levels).reduce((t, r) => t + (r.done ? r.stars || 0 : 0), 0); }
   function checkAchievements(ctx) {
@@ -1652,6 +1661,12 @@
           save.lb.pending.push({ puzzle: 'progress:treats', time: Math.min(86400, tt.total + 1), mistakes: Math.min(999, tt.levels), hints: Math.min(999, tt.dailies), treatKey });
           persist();
         }
+        const wkN = weekTreats(), wkId = weekOf(), weekKey = wkId + '/' + wkN;
+        if (save.lb.sentWeek !== weekKey) {
+          save.lb.pending = save.lb.pending.filter((p) => p.puzzle !== 'progress:week');
+          save.lb.pending.push({ puzzle: 'progress:week', time: Math.min(86400, wkN + 1), mistakes: ((wkId % 1000) + 1000) % 1000, hints: 0, weekKey });
+          persist();
+        }
         const sk = streakNow(), streakKey = save.daily.streak + '/' + (save.daily.best || 0) + '/' + save.daily.last;
         if (save.daily.last && save.lb.sentStreak !== streakKey) {
           save.lb.pending = save.lb.pending.filter((p) => p.puzzle !== 'progress:streak');
@@ -1665,6 +1680,7 @@
           if (p.progKey) save.lb.sentProgress = p.progKey;
           if (p.treatKey) save.lb.sentTreats = p.treatKey;
           if (p.streakKey) save.lb.sentStreak = p.streakKey;
+          if (p.weekKey) save.lb.sentWeek = p.weekKey;
           save.lb.pending.shift(); persist();
         }
         const rows = await rpc('get_scores', { p_room: save.lb.room, p_since: save.lb.since || '1970-01-01T00:00:00Z' });
@@ -1674,6 +1690,7 @@
         }
         save.lb.lastSync = Date.now();
         setTimeout(checkAchievementsQuietly, 0);
+        setTimeout(checkWeekPrize, 0);
         persist();
         return true;
       } catch (e) { return false; } finally { lbBusy = null; }
@@ -1681,7 +1698,7 @@
     return lbBusy;
   }
   async function lbJoin() {
-    const name = ($('#lb-name').value || '').trim(), room = ($('#lb-room').value || '').trim();
+    const name = ($('#lb-name').value || '').trim(), room = ($('#lb-room').value || '').trim().toLowerCase(); // codes ignore capitals
     const st = $('#lb-status');
     if (!lbConfigured()) { st.textContent = 'Not set up yet'; return; }
     if (!name || !room) { st.textContent = 'Enter both'; return; }
@@ -1710,7 +1727,7 @@
     return best;
   }
   function lbPlayers() {
-    const set = new Set(save.lb.rows.filter((r) => /^(daily:|progress:(level|treats)$)/.test(r[1])).map((r) => r[0]));
+    const set = new Set(save.lb.rows.filter((r) => /^(daily:|progress:(level|treats|week)$)/.test(r[1])).map((r) => r[0]));
     if (save.lb.name) set.add(save.lb.name);
     const me = save.lb.name;
     return [...set].sort((a, b) => (a === me ? -1 : b === me ? 1 : a.localeCompare(b)));
@@ -1746,6 +1763,46 @@
     }
     if (save.lb.name) { const m = treatTotals(); out[save.lb.name] = { total: m.total, levels: m.levels, dailies: m.dailies, at: new Date().toISOString() }; }
     return out;
+  }
+  // treats each player earned this week (a player whose last update was in an earlier week has 0)
+  function lbWeek(weekId) {
+    const cur = weekId === undefined || weekId === weekOf(), id = cur ? weekOf() : weekId;
+    const latest = {}, out = {}, wk = ((id % 1000) + 1000) % 1000;
+    for (const [player, puzzle, t, w, , at] of save.lb.rows) {
+      if (puzzle !== 'progress:week' || w !== wk) continue;   // only that week's updates
+      if (!latest[player] || at > latest[player].at) latest[player] = { t, at };
+    }
+    for (const [p, r] of Object.entries(latest)) out[p] = r.t - 1;
+    if (cur && save.lb.name) out[save.lb.name] = weekTreats();
+    return out;
+  }
+  // weekly prizes: 1st 15 treats, 2nd 10, 3rd 5. Ties share the place; you need treats that week,
+  // and at least two people must have earned treats for the week to count.
+  const WEEK_PRIZES = [15, 10, 5];
+  const placeOf = (vals, p) => 1 + Object.values(vals).filter((v) => v > (vals[p] || 0)).length;
+  function weekPlaces(vals) {
+    const out = {}, active = Object.keys(vals).filter((p) => vals[p] > 0);
+    if (active.length < 2) return out;
+    for (const p of active) { const pl = placeOf(vals, p); if (pl <= 3) out[p] = pl; }
+    return out;
+  }
+  // after a week ends, each phone checks last week's final ranking once and pays its own prize
+  function checkWeekPrize() {
+    if (!save.lb.name) return;
+    const last = weekOf() - 7;
+    save.weekPrizes = save.weekPrizes || {};
+    if (last in save.weekPrizes) return;
+    const vals = lbWeek(last);
+    if (save.week && save.week.id === last) vals[save.lb.name] = Math.max(vals[save.lb.name] || 0, save.week.n || 0);
+    const place = weekPlaces(vals)[save.lb.name] || 0, prize = place ? WEEK_PRIZES[place - 1] : 0;
+    save.weekPrizes[last] = place;
+    if (!prize) return persist();
+    save.chestTreats = (save.chestTreats || 0) + prize;
+    persist();
+    const word = ['1st', '2nd', '3rd'][place - 1];
+    const show = () => openModal('<div class="week-prize-icon">' + ['🥇', '🥈', '🥉'][place - 1] + '</div><h2>You came ' + word + ' last week!</h2><p>Here’s your prize: <b>' + prize + ' treats</b> to spend in Jasper’s Room.</p>' + actions([['Yay!', 'close-modal', 'primary']]));
+    if ($('#screen-game').classList.contains('active')) toast('🏆 ' + word + ' place last week! +' + prize + ' treats'); else show();
+    if ($('#screen-home').classList.contains('active')) renderHome();
   }
   // who won each puzzle / day
   function lbWinner(entry) {
@@ -1788,7 +1845,7 @@
   const avatar = (name, k) => '<span class="lb-av" style="--c:' + ['#2A9D96', '#F58BB4', '#8CB8F5', '#FFB938'][k % 4] + '">' + escapeHtml((name || '?').charAt(0).toUpperCase()) + '</span>';
 
   let lbDay = todayStr();
-  function openLeaderboard() { lbDay = todayStr(); renderLeaderboard(); showScreen('leaderboard'); lbSync().then((ok) => { if (ok) renderLeaderboard(); }); }
+  function openLeaderboard() { lbDay = todayStr(); save.lb.tab = 'week'; renderLeaderboard(); showScreen('leaderboard'); lbSync().then((ok) => { if (ok) renderLeaderboard(); }); }
   function renderLeaderboard() {
     const body = $('#lb-body');
     if (!lbReady()) {
@@ -1798,7 +1855,7 @@
     const { wins, dayWins, shared, players, best } = headToHead();
     const me = save.lb.name;
     const two = players.slice(0, 2);
-    const tab = save.lb.tab === 'daily' ? 'daily' : 'levels';
+    const tab = ['week', 'levels', 'daily'].includes(save.lb.tab) ? save.lb.tab : 'week';
     const tr = lbTreats(), lv = lbLevels();
     const crownOf = (vals) => { const ps = two.filter((p) => vals[p] !== undefined); if (ps.length < 2 || vals[ps[0]] === vals[ps[1]]) return null; return vals[ps[0]] > vals[ps[1]] ? ps[0] : ps[1]; };
     const scoreCard = (val, sub, crown) => '<div class="lb-score">' + two.map((p, k) =>
@@ -1810,8 +1867,25 @@
         '<span class="lb-chip' + (c === p ? ' fastest' : '') + (vals[p] === undefined ? ' none' : '') + '">' + avatar(p, k) + (vals[p] === undefined ? '–' : fmt(vals[p])) + '</span>').join('') + '</div></div>';
     };
     const pick = (obj, f) => Object.fromEntries(two.filter((p) => obj[p]).map((p) => [p, f(obj[p])]));
-    let html = '<div class="choice-grid lb-tabs"><button class="choice' + (tab === 'levels' ? ' on' : '') + '" data-lb-tab="levels">Levels</button><button class="choice' + (tab === 'daily' ? ' on' : '') + '" data-lb-tab="daily">Daily</button></div>';
-    if (tab === 'daily') {
+    let html = '<div class="choice-grid lb-tabs">' + [['week', 'This Week'], ['levels', 'Overall'], ['daily', 'Daily']].map(([id, label]) => '<button class="choice' + (tab === id ? ' on' : '') + '" data-lb-tab="' + id + '">' + label + '</button>').join('') + '</div>';
+    if (tab === 'week') {
+      // everyone in the family code, ranked by treats earned since Monday
+      const wt = lbWeek(), ranked = lbPlayers().slice().sort((a, b) => (wt[b] || 0) - (wt[a] || 0) || (a === me ? -1 : b === me ? 1 : a.localeCompare(b)));
+      const mon = new Date(Date.UTC(2026, 0, 1 + weekOf()) ), sun = new Date(mon.getTime() + 6 * 864e5);
+      const fmtD = (d) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
+      const places = weekPlaces(wt);
+      html += '<div class="group-foot center">' + fmtD(mon) + ' – ' + fmtD(sun) + ' · starts fresh every Monday</div>';
+      html += '<div class="week-prizes">' + WEEK_PRIZES.map((v, i) => '<span>' + ['🥇', '🥈', '🥉'][i] + ' ' + v + ' ' + treatSVG('treat inline-treat') + '</span>').join('') + '</div>';
+      html += '<div class="group lb-rank">' + ranked.map((p, k) => {
+        const n = wt[p] || 0, pl = places[p];
+        return '<div class="lb-row lb-rank-row' + (p === me ? ' me' : '') + '"><span class="lb-place">' + (pl ? ['🥇', '🥈', '🥉'][pl - 1] : placeOf(wt, p)) + '</span>' + avatar(p, k) +
+          '<span class="label">' + escapeHtml(p) + (p === me ? ' <small>(you)</small>' : '') + '</span><b class="lb-rank-n">' + n + ' ' + treatSVG('treat inline-treat') + '</b></div>';
+      }).join('') + '</div>';
+      // last week's medals
+      const lw = lbWeek(weekOf() - 7), lp = weekPlaces(lw), lpNames = Object.keys(lp).sort((a, b) => lp[a] - lp[b]);
+      if (lpNames.length) html += '<div class="group-foot center">Last week: ' + lpNames.map((p) => ['🥇', '🥈', '🥉'][lp[p] - 1] + ' ' + escapeHtml(p === me ? 'You' : p) + ' (' + lw[p] + ')').join(' · ') + '</div>';
+      if (ranked.length < 2) html += '<div class="group-foot center">Friends join with the same family code in Settings.</div>';
+    } else if (tab === 'daily') {
       const winVals = Object.fromEntries(two.map((p) => [p, wins[p] || 0]));
       html += scoreCard((p) => wins[p] || 0, (p) => 'puzzles won · ' + (dayWins[p] || 0) + ' days', crownOf(winVals));
       html += '<div class="group-foot center">' + shared + ' daily puzzle' + (shared === 1 ? '' : 's') + ' raced · first completion only · hints add ' + HINT_PENALTY + 's</div>';
@@ -1850,10 +1924,8 @@
       html += scoreCard((p) => (lv[p] ? lv[p].level : '–'), (p) => (lv[p] ? 'current level · ' + baseSize(lv[p].level) + '×' + baseSize(lv[p].level) : 'not shared yet'), crownOf(lvVals));
       html += '<div class="group">' +
         chipRow('Treats earned', pick(tr, (r) => r.levels), (v) => v + ' ' + treatSVG('treat inline-treat')) +
-        chipRow('Levels solved', pick(lv, (r) => r.solved), (v) => v) +
-        chipRow('Stars', pick(lv, (r) => r.stars), (v) => v + ' ★') + '</div>';
+        chipRow('Levels solved', pick(lv, (r) => r.solved), (v) => v) + '</div>';
     }
-    html += '<div class="group-foot">Treats are counted on each puzzle\'s first completion: finishing it, or starting it over (which counts as 0). Skipping or leaving doesn\'t use it up, and replays never add more.</div>';
     html += '<button class="btn ghost lb-refresh" data-action="lb-refresh">Refresh</button>';
     html += '<div class="group-foot center">' + lbStatusText() + (save.lb.pending.length ? ' · ' + save.lb.pending.length + ' update(s) waiting to send' : '') + '</div>';
     body.innerHTML = html;
