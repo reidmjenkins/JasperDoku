@@ -158,7 +158,7 @@
   })();
   const isGolden = (n) => GOLDEN.has(n);
   // the regular board size for a level number (golden levels don't change the size path)
-  const baseSize = (n) => (n <= 4 ? 5 : n <= 15 ? 6 : n <= 50 ? 7 : n <= 150 ? 8 : n <= 400 ? 9 : 10);
+  const baseSize = (n) => (n <= 4 ? 5 : n <= 20 ? 6 : n <= 70 ? 7 : n <= 180 ? 8 : n <= 400 ? 9 : 10);
   // first and last level that share a regular board size
   const sizeStretch = (n) => { const s = baseSize(n); let a = n, b = n; while (a > 1 && baseSize(a - 1) === s) a--; while (b < 1000 && baseSize(b + 1) === s) b++; return [a, b]; };
   // board size for a tricky small level, or 0 for a regular one (never two tricky levels in a row)
@@ -181,8 +181,8 @@
     if (n <= 12) return { size, maxTier: n <= 2 ? 1 : n <= 6 ? 2 : n <= 12 ? 3 : 4, minTier: 0 };
     // From level 13 on, puzzles get harder slowly, all the way up to level 1000 (the hardest).
     // Most levels use the current board size; some are smaller boards made tricky.
-    // 0 at level 13, 1 at level 1000; the square root makes it climb quickly early on, then keep creeping up
-    const g = Math.sqrt(Math.min(1, (n - 13) / 987));
+    // 0 at level 13, 1 at level 1000; the 0.75 power climbs a little faster early on, then keeps creeping up
+    const g = Math.pow(Math.min(1, (n - 13) / 987), 0.75);
     const small = trickySize(n);
     if (small) return g < 0.2 ? { size: small, maxTier: 4, minTier: 3, pick: 2, tricky: true }
       : { size: small, maxTier: 4, minTier: 4, pick: 2 + Math.round(g * 10), tricky: true };
@@ -208,6 +208,7 @@
   // Every 4-7 levels (fixed seed, same on every phone) one square where Jasper belongs hides a scrap.
   // Only levels not beaten yet give one, so a player who is past some scrap levels simply
   // finds the first scrap on the next one: one scrap per level, never a pile at once.
+  const CHEST_EVERY = 25;   // a toy box after every 25th level
   const JOURNAL = window.JASPER_JOURNAL || { PAGES: [], DRAW: {}, FIRST: null };
   const SCRAPS = [];
   JOURNAL.PAGES.forEach((p, pi) => p.scraps.forEach((sc, k) => SCRAPS.push({ id: sc[0], text: sc[1] || '', page: pi, k })));
@@ -217,6 +218,8 @@
     for (let n = 3; n < 5000;) {
       const prev = n; n += 4 + Math.floor(rng() * 4);
       if (isGolden(n)) n += n - prev > 4 ? -1 : 1;   // golden levels belong to Leo; the gap stays 4-7
+      // toy-box levels have their own surprise: the scrap moves to the level after (skipping a golden one)
+      if (n % CHEST_EVERY === 0) { n++; if (isGolden(n)) n++; }
       set.add(n);
     }
     return set;
@@ -305,14 +308,19 @@
     if (!save.week || save.week.id !== wk) save.week = { id: wk, n: 0 };
     save.week.n += n;
   }
-  const STREAK_REWARDS = [[3, 5], [7, 15], [14, 30], [30, 60], [60, 100], [100, 150]];
-  function nextStreakReward(n) { return STREAK_REWARDS.find(([d]) => d > n) || null; }
-  function grantStreakReward(n) {
-    const hit = STREAK_REWARDS.find(([d]) => d === n); if (!hit) return 0;
-    const start = (() => { const d = new Date(); d.setDate(d.getDate() - (n - 1)); return todayStr(d); })();
-    save.daily.rewarded = save.daily.rewarded || {};
-    const key = n + '@' + start; if (save.daily.rewarded[key]) return 0;
-    save.daily.rewarded[key] = true; save.chestTreats = (save.chestTreats || 0) + hit[1]; return hit[1];
+  // Streak: win any puzzle (level, daily or free play) each day. The day's first win pays a small bonus,
+  // and every 7th day in a row opens a streak chest.
+  const FIRST_WIN_BONUS = 2, STREAK_CHEST_EVERY = 7;
+  const daysToChest = (n) => STREAK_CHEST_EVERY - (n % STREAK_CHEST_EVERY);   // wins still needed for the next chest
+  function firstWinToday() {
+    const d = save.daily, today = todayStr();
+    if (d.last === today) return null;
+    d.streak = d.last === yesterdayStr() ? d.streak + 1 : 1;
+    d.last = today;
+    d.best = Math.max(d.best || 0, d.streak);
+    save.chestTreats = (save.chestTreats || 0) + FIRST_WIN_BONUS;
+    save.firstWins = (save.firstWins || 0) + 1;
+    return { streak: d.streak, bonus: FIRST_WIN_BONUS, chest: d.streak % STREAK_CHEST_EVERY === 0 };
   }
   function streakNow() {
     const d = save.daily, today = todayStr();
@@ -370,8 +378,13 @@
   // (forfeit only exists on puzzles skipped under the old rules)
   const dailyCounts = (spec) => spec.mode === 'daily' && !save.daily.done[spec.id] && !save.daily.forfeit[spec.id];
   const DIFFS = { easy: { maxTier: 2, minTier: 0 }, medium: { maxTier: 3, minTier: 2 }, hard: { maxTier: 4, minTier: 3 } };
+  // Free Play only offers board sizes already reached on the map
+  const freeMaxSize = () => baseSize(save.level);
+  const firstLevelOfSize = (n) => { let l = 1; while (baseSize(l) < n && l < 1000) l++; return l; };
   function freeSpec() {
-    const s = save.settings, seed = 'free-' + Date.now() + '-' + Math.floor(Math.random() * 1e6);
+    const s = save.settings;
+    if (s.freeSize > freeMaxSize()) s.freeSize = freeMaxSize();
+    const seed = 'free-' + Date.now() + '-' + Math.floor(Math.random() * 1e6);
     return Object.assign({ mode: 'free', id: seed, seed, size: s.freeSize }, DIFFS[s.freeDiff] || DIFFS.medium);
   }
   const specKey = (spec) => spec.mode + ':' + spec.id;
@@ -878,7 +891,9 @@
     const lost = G.wrongPlaced;
     const stars = lost === 0 ? 3 : lost === 1 ? 2 : 1;
     const spec = G.spec;
-    let milestone = 0, streakUp = 0, streakBonus = 0;
+    let milestone = 0;
+    const firstWin = firstWinToday();
+    if (firstWin) setTimeout(() => lbSync(), 600);
     if (spec.mode === 'level') {
       const prev = save.levels[spec.id] || {};
       const nextSize = baseSize(spec.id + 1);
@@ -892,21 +907,14 @@
       setTimeout(() => lbSync(), 600);
     } else if (spec.mode === 'daily') {
       if (!save.daily.done[spec.id]) {
-        // the first daily solved today grows the streak; catch-up days don't
-        if (spec.day === todayStr() && save.daily.last !== spec.day) {
-          save.daily.streak = save.daily.last === yesterdayStr() ? save.daily.streak + 1 : 1;
-          save.daily.last = spec.day;
-          save.daily.best = Math.max(save.daily.best || 0, save.daily.streak);
-          streakUp = save.daily.streak;
-          streakBonus = grantStreakReward(streakUp);
-          setTimeout(() => lbSync(), 600);
-        }
         save.daily.done[spec.id] = { time: G.elapsed, stars, hints: G.hints };
       } else if (G.elapsed < save.daily.done[spec.id].time) {
         save.daily.done[spec.id].time = G.elapsed;
       }
     }
+    const wkBefore = lbReady() ? lbWeek() : null;
     const treats = recordTreats(spec);
+    const close = whatsClose(spec, wkBefore);
     setTimeout(() => lbSync(), 700);
     const st = save.stats;
     st.wins++;
@@ -923,9 +931,45 @@
     const puzzleKey = spec.mode === 'daily' ? 'daily:' + spec.id : null;
     if (puzzleKey && G.counts) lbQueue(puzzleKey, G.elapsed, G.wrongPlaced, G.hints);
     const myScore = G.elapsed + HINT_PENALTY * G.hints, counted = !!G.counts;
-    setTimeout(() => { showWin(stars, { milestone, unlocked, streakUp, streakBonus, treats }); if (puzzleKey) lbWinCompare(puzzleKey, myScore, counted); }, 450);
+    setTimeout(() => { showWin(stars, { milestone, unlocked, firstWin, treats, close }); if (puzzleKey) lbWinCompare(puzzleKey, myScore, counted); }, 450);
+    // chests open right on the win screen, one after another: a streak chest, then a ready toy box
+    // (this level's, or one left unopened earlier)
+    winQueue = [];
+    if (firstWin && firstWin.chest) winQueue.push(() => openStreakChest(firstWin.streak));
+    if (spec.mode === 'level') {
+      let k = 0;
+      for (let c = 1; c * CHEST_EVERY < save.level; c++) if (chestReady(c)) { k = c; break; }
+      if (k) winQueue.push(() => openChest(k, true));
+    }
+    if (winQueue.length) setTimeout(nextWinPopup, 1700);
   }
 
+  // One "what's close" line for the win screen (or none): you moved up this week, you're within
+  // 15 treats of the next place, or a toy box is within 5 levels.
+  function whatsClose(spec, before) {
+    const me = save.lb.name, ord = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th');
+    if (before && me) {
+      const after = lbWeek(), mine = after[me] || 0;
+      if (Object.keys(after).length > 1 && mine > 0) {
+        const was = placeOf(before, me), now = placeOf(after, me);
+        if (now < was && (before[me] || 0) < mine) return { icon: '⬆️', up: true, html: 'You moved up to <b>' + ord(now) + '</b> this week!' };
+        const ahead = Object.keys(after).filter((p) => p !== me && after[p] > mine).sort((a, b) => after[a] - after[b]);
+        const left = weekOf() + 6 - dayNum(todayStr()), when = left === 0 ? 'last day' : left + ' day' + (left === 1 ? '' : 's') + ' left';
+        if (ahead.length && after[ahead[0]] - mine <= 15) {
+          const gap = after[ahead[0]] - mine, target = placeOf(after, ahead[0]);
+          return { icon: '🏆', html: '<b>' + gap + ' treat' + (gap === 1 ? '' : 's') + ' behind ' + escapeHtml(ahead[0]) + '</b> for ' + ord(target) + ' this week', note: when };
+        }
+      }
+    }
+    if (spec.mode === 'level') {
+      for (let c = Math.max(1, Math.ceil(save.level / CHEST_EVERY)); c * CHEST_EVERY < save.level + 5; c++) {
+        if (save.chests[c] || c * CHEST_EVERY < save.level) continue;
+        const n = c * CHEST_EVERY - save.level + 1;
+        return { icon: '🎁', html: n === 1 ? 'Toy box on the <b>next level</b>' : 'Toy box in <b>' + n + ' levels</b>' };
+      }
+    }
+    return null;
+  }
   const FLAME = '<svg class="flame" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c1 3.5 5 5.5 5 10.5A5 5 0 0 1 7 12.5c0-2 1-3.5 2-4.5 0 2 1 3 2 3 0-3-1-6 1-9Z" fill="currentColor"/></svg>';
   const WIN_TITLES = ['Jasper approves!', 'Purrfect!', 'Treats for everyone!', 'Nap spot secured!', 'Clever human!'];
   function showWin(stars, info) {
@@ -937,16 +981,25 @@
     const ms = $('#win-milestone');
     ms.hidden = !info.milestone;
     if (info.milestone) ms.innerHTML = '<span class="ms-grid" style="--n:' + info.milestone + '"></span><div><b>' + info.milestone + ' × ' + info.milestone + ' boards unlocked</b><small>Bigger boards, trickier puzzles</small></div>';
-    const wsk = $('#win-streak');
-    wsk.hidden = !info.streakUp;
-    if (info.streakUp) { const nx = nextStreakReward(info.streakUp); wsk.innerHTML = FLAME + '<b>' + info.streakUp + '-day streak!</b>' + (info.streakBonus ? '<span class="streak-bonus">' + treatSVG('treat inline-treat') + '+' + info.streakBonus + ' streak reward</span>' : '') + '<small>' + (nx ? (nx[0] - info.streakUp) + ' more day' + (nx[0] - info.streakUp === 1 ? '' : 's') + ' to +' + nx[1] + ' treats' : 'Kept alive for today') + '</small>'; }
-    $('#win-treats').hidden = true;
+    // the day's first win: bonus treats and the streak
+    const wsk = $('#win-streak'), fw = info.firstWin;
+    wsk.hidden = !fw;
+    if (fw) {
+      const left = daysToChest(fw.streak);
+      wsk.innerHTML = '<b>☀️ First win today</b><span class="fw-bonus">+' + fw.bonus + ' ' + treatSVG('treat inline-treat') + '</span><small>🔥 ' + fw.streak + '-day streak · ' +
+        (fw.chest ? 'streak chest unlocked! 🎁' : 'chest in ' + left + ' day' + (left === 1 ? '' : 's')) + '</small>';
+    }
+    // at most one "what's close" bubble (plus the first-win card above it)
+    const wc = $('#win-treats'), cl = info.close;
+    wc.hidden = !cl;
+    wc.className = 'win-close' + (cl && cl.up ? ' up' : '');
+    if (cl) wc.innerHTML = '<i>' + cl.icon + '</i><span>' + cl.html + '</span>' + (cl.note ? '<em>' + cl.note + '</em>' : '');
     if (scrapAway) scrapAway(true);
     const ub = $('#win-badges');
     $('#win-rival').innerHTML = '';
     const jr = G.scrapGot ? '<button class="win-journal" data-action="journal-read"><span>📜</span><b>New journal scrap</b><small>Read it now</small></button>' : '';
     ub.innerHTML = jr + ((info.unlocked || []).length ? '<small class="wb-label">New achievement' + (info.unlocked.length > 1 ? 's' : '') + '</small><div class="wb-chips">' + info.unlocked.map((a) => '<span class="win-badge"><i>' + a.icon + '</i><b>' + a.name + '</b></span>').join('') + '</div>' : '');
-    $('#win').classList.toggle('busy', !!(info.milestone || (info.unlocked || []).length || G.scrapGot));
+    $('#win').classList.toggle('busy', !!(info.milestone || (info.unlocked || []).length || G.scrapGot || info.firstWin));
     // the treats won on this board (golden levels pay out more, all shown gold)
     const tw = info.treats, won = tw ? tw.won : G.lives, slots = G.spec.golden ? won : G.maxLives;
     $('#win-stars').classList.toggle('golden', !!G.spec.golden);
@@ -985,7 +1038,7 @@
   function skip() {
     const s = G.spec;
     const msg = s.mode === 'level'
-      ? 'Skip Level ' + s.id + '? Your board and treats are saved, so you can come back to it any time from All Levels.'
+      ? 'Skip Level ' + s.id + '? Your board and treats are saved, so you can come back to it any time from the Map.'
       : s.mode === 'daily' ? 'Skip Daily #' + s.n + ' for now? Your board, treats and time are saved for when you come back.' : 'Get a brand new puzzle?';
     openModal('<h2>Skip?</h2><p>' + msg + '</p>' + actions([['Skip it', 'confirm-skip', 'primary'], ['Keep playing', 'close-modal', 'ghost']]));
   }
@@ -1058,17 +1111,21 @@
       card.classList.toggle('lit', sk.today);
       card.classList.toggle('waiting', sk.alive && !sk.today);
       $('#sc-title').textContent = sk.n ? sk.n + '-day streak' : 'Start a streak';
-      const nx = nextStreakReward(sk.n), reward = nx ? ' · day ' + nx[0] + ': +' + nx[1] + ' treats' : '';
-      $('#sc-sub').textContent = sk.today ? 'Done for today' + reward
-        : sk.alive ? 'Play a daily today to keep it' + reward
-        : 'Day 3 of a streak: +5 treats' + (sk.best > 1 ? ' · best ' + sk.best : '');
-      // last 7 days: which ones are part of the current streak
+      const left = daysToChest(sk.n);
+      $('#sc-sub').textContent = sk.today ? 'Done for today'
+        : sk.alive ? (left === 1 ? 'Win a puzzle today to open a chest! 🎁' : 'Win a puzzle today to keep it going')
+        : 'Win a puzzle each day · a chest every ' + STREAK_CHEST_EVERY + ' days';
+      // this week of the streak: filled days, with the chest on day 7
+      const filled = sk.today ? ((sk.n - 1) % STREAK_CHEST_EVERY) + 1 : sk.n % STREAK_CHEST_EVERY;
+      // each lit flame carries its streak day number; the present waits at the end
+      const cycleStart = sk.n - filled;
+      const FLAME = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .8c1.6 4 8.6 6.6 8.6 13.8a8.6 8.6 0 0 1-17.2 0c0-3 1.5-5.6 3.2-7.1 0 2.8 1.4 4.2 2.8 4.2 0-4-1-7.6 2.6-10.9Z"/></svg>';
       let dots = '';
-      const lastN = sk.alive ? dayNum(save.daily.last) : -1e9, firstN = lastN - sk.n + 1;
-      for (let k = 6; k >= 0; k--) {
-        const d = new Date(); d.setDate(d.getDate() - k);
-        const n = dayNum(todayStr(d)), on = n >= firstN && n <= lastN;
-        dots += '<i class="' + (on ? 'on' : '') + (k === 0 ? ' today' : '') + '" title="' + d.toLocaleDateString(undefined, { weekday: 'long' }) + '">' + d.toLocaleDateString(undefined, { weekday: 'narrow' }) + '</i>';
+      for (let k = 1; k <= STREAK_CHEST_EVERY; k++) {
+        const on = k <= filled, next = !sk.today && k === filled + 1;
+        if (k === STREAK_CHEST_EVERY) { dots += '<i class="chest' + (on ? ' on' : '') + (next ? ' today' : '') + '">🎁</i>'; continue; }
+        const day = cycleStart + k;
+        dots += '<i class="flame' + (on ? ' on' : '') + (next ? ' today' : '') + '">' + FLAME + (on ? '<b' + (day > 99 ? ' class="sm"' : '') + '>' + day + '</b>' : '') + '</i>';
       }
       $('#sc-week').innerHTML = dots;
     }
@@ -1098,7 +1155,6 @@
     $('#home-ach-sub').textContent = Object.keys(save.achievements).length + ' of ' + ACHIEVEMENTS.length + ' unlocked';
   }
   // ---------------------------------------------------------------- level path & chests
-  const CHEST_EVERY = 25;
   const COSMETICS = {
     crown: 'Little crown', bow: 'Pink bow', party: 'Party hat', post: 'Scratching post', scratcher: 'Cardboard scratcher',
     yarn: 'Yarn ball', mouse: 'Toy mouse', fire: 'Cozy fire',
@@ -1187,27 +1243,68 @@
     const cur = wrap.querySelector('.lp-node.current, .lp-toybox.current') || wrap.querySelector('.lp-toybox.ready');
     if (cur) setTimeout(() => cur.scrollIntoView({ block: 'center' }), 30);
   }
-  function openChest(k) {
-    if (save.chests[k]) {
-      const r = save.chests[k];
-      return openModal('<div class="chest-open done">' + CHEST_SVG + '</div><h2>Chest ' + k + '</h2><p>You found <b>' + (r.type === 'treats' ? r.amount + ' treats' : r.name) + '</b> in this toy box.</p>' + actions([['Nice', 'close-modal', 'primary']]));
-    }
-    if (!chestReady(k)) return toast('Finish level ' + k * CHEST_EVERY + ' to open this toy box');
+  // one surprise from a chest: a cosmetic Jasper doesn't have yet (half the time) or 1-50 treats;
+  // the first chest after Looks arrived also holds a free background
+  function rollChest() {
     const pool = Object.assign({}, COSMETICS, holidayOn() ? WINTER_COSMETICS : {});
     const left = Object.keys(pool).filter((id) => !save.room.owned.includes(id));
     let r;
     if (left.length && Math.random() < .5) { const id = left[Math.floor(Math.random() * left.length)]; r = { type: 'cosmetic', id, name: pool[id] }; save.room.owned.push(id); }
     else { r = { type: 'treats', amount: 1 + Math.floor(Math.random() * 50) }; save.chestTreats = (save.chestTreats || 0) + r.amount; }
-    // the first toy box opened after Looks arrived also holds a free background
     const L = looksSave(), gift = !L.gift && !L.owned.includes(GIFT_LOOK);
     if (gift) { L.gift = true; L.owned.push(GIFT_LOOK); L.isNew = true; r.look = GIFT_LOOK; }
-    r.at = todayStr(); save.chests[k] = r; persist(); looksBadge();
+    r.at = todayStr();
+    return r;
+  }
+  // A chest waits, bobbing and wiggling, until it's tapped; then toys fly out and the prize rises from it.
+  // (The prize is already saved before the tap, so closing the app early never loses it.)
+  function showChestReward(r, kicker) {
+    const gift = !!r.look;
+    const giftHtml = gift ? '<p style="margin-bottom:8px">…and a new look:</p><div class="gift-look bgp bgp-' + r.look + '"></div><p><b>' + lookItem('bg', r.look).name + ' background</b></p>' : '';
+    const prize = '<div class="chest-prize" hidden><h2>' + (r.type === 'treats' ? '+' + r.amount + ' treats!' : r.name + '!') + '</h2><p>' +
+      (r.type === 'treats' ? 'Added to Jasper’s treat jar for the shop. You have <b>' + treatJar() + '</b> to spend.' : 'A new cosmetic for Jasper. It is waiting in Jasper’s Room.') + '</p>' + giftHtml +
+      (gift ? actions([['Try it on', 'looks-try', 'primary'], ['Later', 'close-modal', 'ghost']]) + '<p class="gift-hint">Change it anytime from the ☰ menu → Looks</p>' : actions([['Yay!', 'close-modal', 'primary']])) + '</div>';
+    openModal((kicker ? '<p class="chest-kicker">' + kicker + '</p>' : '') +
+      '<button class="chest-stage" data-action="chest-reveal" aria-label="Open the chest"><span class="chest-open">' + CHEST_SVG + '<span class="chest-toys"></span></span><span class="chest-tap">Tap to open!</span></button>' + prize);
+    sfx('mark');
+  }
+  function revealChest() {
+    const st = document.querySelector('#modal .chest-stage'); if (!st || st.classList.contains('open')) return;
+    st.classList.add('open'); st.disabled = true;
     sfx('win');
-    const giftHtml = gift ? '<p style="margin-bottom:8px">…and a new look:</p><div class="gift-look bgp bgp-' + GIFT_LOOK + '"></div><p><b>' + lookItem('bg', GIFT_LOOK).name + ' background</b></p>' : '';
-    openModal('<div class="chest-open">' + CHEST_SVG + '<div class="chest-burst"></div></div><h2>' + (r.type === 'treats' ? '+' + r.amount + ' treats!' : r.name + '!') + '</h2><p>' +
-      (r.type === 'treats' ? 'Added to Jasper\'s treat jar for the shop. You have <b>' + treatJar() + '</b> to spend.' : 'A new cosmetic for Jasper. It is waiting in Jasper\'s Room.') + '</p>' + giftHtml +
-      (gift ? actions([['Try it on', 'looks-try', 'primary'], ['Later', 'close-modal', 'ghost']]) + '<p class="gift-hint">Change it anytime from the ☰ menu → Looks</p>' : actions([['Yay!', 'close-modal', 'primary']])));
-    renderLevels();
+    const toys = st.querySelector('.chest-toys'), bits = ['🧶', '🐭', '🪶', '🐟', '⭐', '🎾', '✨', '🧶', '🐾'];
+    bits.forEach((b, k) => {
+      const t = document.createElement('i'), a = (-150 + k * (120 / (bits.length - 1))) * Math.PI / 180, d = 90 + Math.random() * 50;
+      t.textContent = b; t.style.setProperty('--dx', Math.round(Math.cos(a) * d + 60) + 'px'); t.style.setProperty('--dy', Math.round(Math.sin(a) * d) + 'px');
+      t.style.setProperty('--r', Math.round(Math.random() * 360 - 180) + 'deg'); t.style.animationDelay = (k * 30) + 'ms';
+      toys.appendChild(t);
+    });
+    setTimeout(() => { const p = document.querySelector('#modal .chest-prize'); if (p) p.hidden = false; }, 420);
+  }
+  // a streak chest for every 7 days in a row (kept per streak start, so it never pays twice)
+  function openStreakChest(n) {
+    const start = (() => { const d = new Date(); d.setDate(d.getDate() - (n - 1)); return todayStr(d); })(), key = start + ':' + n;
+    save.streakChests = save.streakChests || {};
+    if (save.streakChests[key]) return nextWinPopup();
+    const r = rollChest(); r.streak = n; save.streakChests[key] = r; persist(); looksBadge();
+    showChestReward(r, '🔥 ' + n + '-day streak chest');
+  }
+  // pop-ups waiting to show over the win screen, one at a time
+  let winQueue = [];
+  function nextWinPopup() {
+    if ($('#win').hidden || !$('#screen-game').classList.contains('active')) { winQueue = []; return; }
+    const f = winQueue.shift(); if (f) f();
+  }
+  function openChest(k, fromWin) {
+    if (save.chests[k]) {
+      const r = save.chests[k];
+      return openModal('<div class="chest-open done">' + CHEST_SVG + '</div><h2>Chest ' + k + '</h2><p>You found <b>' + (r.type === 'treats' ? r.amount + ' treats' : r.name) + '</b> in this toy box.</p>' + actions([['Nice', 'close-modal', 'primary']]));
+    }
+    if (!chestReady(k)) return toast('Finish level ' + k * CHEST_EVERY + ' to open this toy box');
+    const r = rollChest();
+    save.chests[k] = r; persist(); looksBadge();
+    showChestReward(r, 'Toy box ' + k);
+    if (!fromWin) renderLevels();
   }
 
   // ---------------------------------------------------------------- modals
@@ -1215,7 +1312,7 @@
     return '<div class="modal-actions">' + list.map(([label, act, kind]) => '<button class="btn ' + kind + '" data-action="' + act + '">' + label + '</button>').join('') + '</div>';
   }
   function openModal(html, wide) { const c = $('#modal-card'); c.innerHTML = html; c.classList.toggle('wide', !!wide); $('#modal').hidden = false; }
-  function closeModal() { $('#modal').hidden = true; }
+  function closeModal() { $('#modal').hidden = true; if (winQueue.length) setTimeout(nextWinPopup, 350); }
 
   function openHowTo() {
     openModal(
@@ -1280,7 +1377,10 @@
   }
   function openFreePlay() {
     const s = save.settings;
-    const sizes = [5, 6, 7, 8, 9, 10].map((n) => '<button class="choice' + (s.freeSize === n ? ' on' : '') + '" data-free-size="' + n + '">' + n + '×' + n + '</button>').join('');
+    const top = freeMaxSize(); if (s.freeSize > top) s.freeSize = top;
+    const sizes = [5, 6, 7, 8, 9, 10].map((n) => n > top
+      ? '<button class="choice locked" disabled aria-label="' + n + '×' + n + ' locked until level ' + firstLevelOfSize(n) + '">🔒 ' + n + '×' + n + '<small>Level ' + firstLevelOfSize(n) + '</small></button>'
+      : '<button class="choice' + (s.freeSize === n ? ' on' : '') + '" data-free-size="' + n + '">' + n + '×' + n + '</button>').join('');
     const diffs = ['easy', 'medium', 'hard'].map((d) => '<button class="choice' + (s.freeDiff === d ? ' on' : '') + '" data-free-diff="' + d + '">' + cap(d) + '</button>').join('');
     openModal('<h2>Free Play</h2><p>Endless random puzzles. Pick a size and how tricky.</p><strong>Board size</strong><div class="choice-grid">' + sizes + '</div><strong>Difficulty</strong><div class="choice-grid">' + diffs + '</div>' + actions([['Start', 'free-start', 'primary'], ['Cancel', 'close-modal', 'ghost']]), true);
   }
@@ -1301,9 +1401,9 @@
     { id: 'speed8', icon: '💨', c: '#8ECDF7', name: 'Zoomies', desc: 'Solve an 8 × 8 in under 2 minutes, no hints', test: (x) => x.N === 8 && x.elapsed < 120 && x.hints === 0 },
     { id: 'daily1', icon: '☀️', c: '#FFB861', name: 'Morning Routine', desc: 'Solve a daily puzzle', test: (x) => x.st.daily >= 1 },
     { id: 'daily10', icon: '🔟', c: '#2A9D96', name: 'Perfect Ten', desc: 'Solve all 10 daily puzzles in one day', test: (x) => !!x.fullDay },
-    { id: 'streak3', icon: '🔥', c: '#FF8E80', name: 'Creature of Habit', desc: 'Reach a 3-day daily streak', test: (x) => (x.sv.daily.best || 0) >= 3 },
-    { id: 'streak7', icon: '📅', c: '#FF9F94', name: 'Weekly Whiskers', desc: 'Reach a 7-day daily streak', test: (x) => (x.sv.daily.best || 0) >= 7 },
-    { id: 'streak30', icon: '🌙', c: '#B79BF2', name: 'Devoted', desc: 'Reach a 30-day daily streak', test: (x) => (x.sv.daily.best || 0) >= 30 },
+    { id: 'streak3', icon: '🔥', c: '#FF8E80', name: 'Creature of Habit', desc: 'Win a puzzle 3 days in a row', test: (x) => (x.sv.daily.best || 0) >= 3 },
+    { id: 'streak7', icon: '📅', c: '#FF9F94', name: 'Weekly Whiskers', desc: 'Win a puzzle 7 days in a row', test: (x) => (x.sv.daily.best || 0) >= 7 },
+    { id: 'streak30', icon: '🌙', c: '#B79BF2', name: 'Devoted', desc: 'Win a puzzle 30 days in a row', test: (x) => (x.sv.daily.best || 0) >= 30 },
     { id: 'stars50', icon: '⭐️', c: '#FFC245', name: 'Star Gazer', desc: 'Earn 50 stars on levels', test: (x) => x.stars >= 50 },
     { id: 'refill', icon: '🍪', c: '#E9A85E', name: 'Nine Lives', desc: 'Win a puzzle after starting over', test: (x) => x.st.refillWins >= 1 },
     { id: 'golden1', icon: '🌟', c: '#FFC245', name: 'Golden Touch', desc: 'Clear a golden treat level', test: (x) => (x.st.golden || 0) >= 1 },
@@ -1335,7 +1435,7 @@
     { id: 'daily25', icon: '🗓️', c: '#7FD3CC', name: 'Regular', desc: 'Solve 25 daily puzzles', test: (x) => x.st.daily >= 25 },
     { id: 'daily100', icon: '📆', c: '#2A9D96', name: 'Daily Devotee', desc: 'Solve 100 daily puzzles', test: (x) => x.st.daily >= 100 },
     { id: 'hattrick', icon: '🎩', c: '#959AE6', name: 'Hat Trick', desc: 'Solve all 10 dailies on 3 different days', test: (x) => fullDailyDays() >= 3 },
-    { id: 'streak14', icon: '🔥', c: '#FF6B5B', name: 'Fortnight Feline', desc: 'Reach a 14-day daily streak', test: (x) => (x.sv.daily.best || 0) >= 14 },
+    { id: 'streak14', icon: '🔥', c: '#FF6B5B', name: 'Fortnight Feline', desc: 'Win a puzzle 14 days in a row', test: (x) => (x.sv.daily.best || 0) >= 14 },
     // Golden
     { id: 'golden10', icon: '🏅', c: '#F2C14E', name: 'Golden Era', desc: 'Clear 10 golden treat levels', test: (x) => (x.st.golden || 0) >= 10 },
     { id: 'puregold', icon: '🪙', c: '#FFC245', name: 'Pure Gold', desc: 'Clear a golden level without a hint', test: (x) => !!x.golden && x.hints === 0 },
@@ -1439,8 +1539,14 @@
       const n = list.filter((a) => save.achievements[a.id]).length;
       sections += '<div class="group-label ach-cat"><span>' + title + '</span><span>' + n + ' / ' + list.length + '</span></div><div class="group">' + ordered.map(row).join('') + '</div>';
     }
+    // medal shelf: weekly medals, streak chests and first wins
+    const wp = Object.values(save.weekPrizes || {}), medal = (n) => wp.filter((x) => x === n).length;
+    const shelf = '<div class="group-label ach-cat"><span>Medal Shelf</span></div><div class="medal-shelf">' +
+      [['🥇', medal(1), '1st place weeks'], ['🥈', medal(2), '2nd place weeks'], ['🥉', medal(3), '3rd place weeks'],
+        ['🎁', Object.keys(save.streakChests || {}).length, 'streak chests'], ['☀️', save.firstWins || 0, 'first wins of the day'], ['🔥', save.daily.best || 0, 'best streak']]
+        .map(([ic, n, label]) => '<div class="medal' + (n ? '' : ' none') + '"><span>' + ic + '</span><b>' + n + '</b><small>' + label + '</small></div>').join('') + '</div>';
     $('#ach-body').innerHTML =
-      '<div class="ach-summary"><div class="ring" style="--p:' + Math.round((got / ACHIEVEMENTS.length) * 100) + '"><span>' + got + '</span></div><div><b>' + got + ' of ' + ACHIEVEMENTS.length + ' unlocked</b><small>Keep solving to collect them all</small></div></div>' + sections;
+      '<div class="ach-summary"><div class="ring" style="--p:' + Math.round((got / ACHIEVEMENTS.length) * 100) + '"><span>' + got + '</span></div><div><b>' + got + ' of ' + ACHIEVEMENTS.length + ' unlocked</b><small>Keep solving to collect them all</small></div></div>' + shelf + sections;
     showScreen('achievements');
   }
   function shortDate(str) {
@@ -1854,19 +1960,18 @@
     }
     const { wins, dayWins, shared, players, best } = headToHead();
     const me = save.lb.name;
-    const two = players.slice(0, 2);
     const tab = ['week', 'levels', 'daily'].includes(save.lb.tab) ? save.lb.tab : 'week';
-    const tr = lbTreats(), lv = lbLevels();
-    const crownOf = (vals) => { const ps = two.filter((p) => vals[p] !== undefined); if (ps.length < 2 || vals[ps[0]] === vals[ps[1]]) return null; return vals[ps[0]] > vals[ps[1]] ? ps[0] : ps[1]; };
-    const scoreCard = (val, sub, crown) => '<div class="lb-score">' + two.map((p, k) =>
-      '<div class="lb-player">' + avatar(p, k) + '<b>' + (crown === p ? '👑 ' : '') + escapeHtml(p) + (p === me ? ' <small>(you)</small>' : '') + '</b><strong>' + val(p) + '</strong><small>' + sub(p) + '</small></div>').join('<div class="lb-vs">vs</div>') +
-      (players.length < 2 ? '<div class="lb-vs">vs</div><div class="lb-player waiting">' + avatar('?', 1) + '<b>Waiting…</b><small>Join with the same family code</small></div>' : '') + '</div>';
-    const chipRow = (label, vals, fmt) => {
-      const c = crownOf(vals);
-      return '<div class="lb-row"><span class="label">' + label + '</span><div class="lb-times">' + two.map((p, k) =>
-        '<span class="lb-chip' + (c === p ? ' fastest' : '') + (vals[p] === undefined ? ' none' : '') + '">' + avatar(p, k) + (vals[p] === undefined ? '–' : fmt(vals[p])) + '</span>').join('') + '</div></div>';
+    const tr = lbTreats(), lv = lbLevels(), stk = lbStreaks();
+    const colorOf = (p) => Math.max(0, players.indexOf(p));
+    const who = (p) => escapeHtml(p === me ? 'You' : p);
+    // a ranked list of everyone: biggest value first, ties share a place, 👑 for the leader
+    const rankList = (vals, sub, right) => {
+      const ranked = players.slice().sort((a, b) => (vals[b] || 0) - (vals[a] || 0) || (a === me ? -1 : b === me ? 1 : a.localeCompare(b)));
+      const top = ranked.length > 1 && (vals[ranked[0]] || 0) > 0 && (vals[ranked[1]] || 0) < vals[ranked[0]] ? ranked[0] : null;
+      return '<div class="group lb-rank">' + ranked.map((p) => '<div class="lb-row lb-rank-row' + (p === me ? ' me' : '') + '"><span class="lb-place">' + (p === top ? '👑' : placeOf(vals, p)) + '</span>' + avatar(p, colorOf(p)) +
+        '<span class="label">' + escapeHtml(p) + (p === me ? ' <small>(you)</small>' : '') + '<small class="lb-sub">' + sub(p) + '</small></span><b class="lb-rank-n">' + right(p) + '</b></div>').join('') + '</div>';
     };
-    const pick = (obj, f) => Object.fromEntries(two.filter((p) => obj[p]).map((p) => [p, f(obj[p])]));
+    const streakTxt = (p) => (stk[p] ? ' · 🔥' + stk[p] : '');
     let html = '<div class="choice-grid lb-tabs">' + [['week', 'This Week'], ['levels', 'Overall'], ['daily', 'Daily']].map(([id, label]) => '<button class="choice' + (tab === id ? ' on' : '') + '" data-lb-tab="' + id + '">' + label + '</button>').join('') + '</div>';
     if (tab === 'week') {
       // everyone in the family code, ranked by treats earned since Monday
@@ -1884,48 +1989,44 @@
       // last week's medals
       const lw = lbWeek(weekOf() - 7), lp = weekPlaces(lw), lpNames = Object.keys(lp).sort((a, b) => lp[a] - lp[b]);
       if (lpNames.length) html += '<div class="group-foot center">Last week: ' + lpNames.map((p) => ['🥇', '🥈', '🥉'][lp[p] - 1] + ' ' + escapeHtml(p === me ? 'You' : p) + ' (' + lw[p] + ')').join(' · ') + '</div>';
-      if (ranked.length < 2) html += '<div class="group-foot center">Friends join with the same family code in Settings.</div>';
     } else if (tab === 'daily') {
-      const winVals = Object.fromEntries(two.map((p) => [p, wins[p] || 0]));
-      html += scoreCard((p) => wins[p] || 0, (p) => 'puzzles won · ' + (dayWins[p] || 0) + ' days', crownOf(winVals));
-      html += '<div class="group-foot center">' + shared + ' daily puzzle' + (shared === 1 ? '' : 's') + ' raced · first completion only · hints add ' + HINT_PENALTY + 's</div>';
-      const stk = lbStreaks();
-      html += '<div class="group">' + chipRow('Days won', Object.fromEntries(two.map((p) => [p, dayWins[p] || 0])), (v) => v) +
-        chipRow('Daily streak', Object.fromEntries(two.filter((p) => stk[p] !== undefined).map((p) => [p, stk[p]])), (v) => v + (v === 1 ? ' day' : ' days')) +
-        chipRow('Treats earned', pick(tr, (r) => r.dailies), (v) => v + ' ' + treatSVG('treat inline-treat')) + '</div>';
-      // one day, puzzle by puzzle
-      const dr = dayResult(lbDay, best);
-      const dayTitle = lbDay === todayStr() ? 'Today' : shortDate(lbDay);
-      const score = two.length === 2 ? ' · ' + two.map((p) => escapeHtml(p === me ? 'You' : p) + ' ' + (dr.wins[p] || 0)).join(' – ') : '';
-      html += '<div class="group-label lb-day-head"><button class="icon-btn small" data-action="lb-day-prev" aria-label="Previous day"><svg viewBox="0 0 24 24"><path d="M15 5 8 12l7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button><span>' + dayTitle + score + '</span><button class="icon-btn small" data-action="lb-day-next" aria-label="Next day"' + (lbDay >= todayStr() ? ' disabled' : '') + '><svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>';
+      // everyone ranked by daily puzzles won (first try only; the fastest time wins each puzzle)
+      html += '<div class="group-foot center">' + shared + ' daily puzzle' + (shared === 1 ? '' : 's') + ' raced · first try only · hints add ' + HINT_PENALTY + 's</div>';
+      html += rankList(wins, (p) => (dayWins[p] || 0) + ' day' + (dayWins[p] === 1 ? '' : 's') + ' won' + streakTxt(p), (p) => (wins[p] || 0) + ' <small>won</small>');
+      // one day, puzzle by puzzle: who was fastest, and your own time
+      const dr = dayResult(lbDay, best), dayTitle = lbDay === todayStr() ? 'Today' : shortDate(lbDay);
+      const dLead = Object.keys(dr.wins).sort((a, b) => dr.wins[b] - dr.wins[a]);
+      const dTie = dLead.length > 1 && dr.wins[dLead[0]] === dr.wins[dLead[1]];
+      const dayLine = !dLead.length ? '' : dTie ? ' · tied' : ' · 👑 ' + who(dLead[0]) + ' ' + dr.wins[dLead[0]] + ' of ' + dr.shared;
+      html += '<div class="group-label lb-day-head"><button class="icon-btn small" data-action="lb-day-prev" aria-label="Previous day"><svg viewBox="0 0 24 24"><path d="M15 5 8 12l7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button><span>' + dayTitle + dayLine + '</span><button class="icon-btn small" data-action="lb-day-next" aria-label="Next day"' + (lbDay >= todayStr() ? ' disabled' : '') + '><svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>';
       html += '<div class="group">';
       for (let n = 1; n <= DAILY_COUNT; n++) {
-        const entry = best['daily:' + dailyKey(lbDay, n)] || {};
-        const w = lbWinner(entry);
-        html += '<div class="lb-row"><span class="label">#' + n + ' <small>' + DAILY_LADDER[n - 1].size + '×' + DAILY_LADDER[n - 1].size + '</small></span><div class="lb-times">' + two.map((p, k) => {
-          const r = entry[p];
-          const t = r ? fmtTime(r.t) + (r.hints ? '<i class="lb-hint">💡' + r.hints + '</i>' : '') : '–';
-          return '<span class="lb-chip' + (r && w === p ? ' fastest' : '') + (r ? '' : ' none') + '">' + avatar(p, k) + t + '</span>';
-        }).join('') + '</div></div>';
+        const entry = best['daily:' + dailyKey(lbDay, n)] || {}, w = lbWinner(entry), ps = Object.keys(entry);
+        const fast = ps.length ? ps.reduce((a, b) => (entry[b].t < entry[a].t ? b : a)) : null;
+        const chip = (p, cls) => '<span class="lb-chip' + cls + '">' + avatar(p, colorOf(p)) + fmtTime(entry[p].t) + (entry[p].hints ? '<i class="lb-hint">💡' + entry[p].hints + '</i>' : '') + '</span>';
+        let cells = !fast ? '<span class="lb-chip none">–</span>' : chip(fast, w === fast ? ' fastest' : '');
+        if (fast && fast !== me && entry[me]) cells += chip(me, '');
+        if (ps.length > 1) cells += '<small class="lb-more">' + ps.length + ' played</small>';
+        html += '<div class="lb-row"><span class="label">#' + n + ' <small>' + DAILY_LADDER[n - 1].size + '×' + DAILY_LADDER[n - 1].size + '</small></span><div class="lb-times">' + cells + '</div></div>';
       }
       html += '</div>';
       const days = [...new Set(Object.keys(best).map((k) => k.slice(6, 16)))].sort().reverse().slice(0, 14);
       if (days.length) {
         html += '<div class="group-label">Recent Days</div><div class="group">' + days.map((d) => {
-          const r = dayResult(d, best);
-          const ps = two.map((p) => r.wins[p] || 0);
-          const lead = ps.length === 2 && ps[0] !== ps[1];
+          const r = dayResult(d, best), lead = Object.keys(r.wins).sort((a, b) => r.wins[b] - r.wins[a]);
+          const tie = lead.length > 1 && r.wins[lead[0]] === r.wins[lead[1]];
           return '<button class="lb-row lb-day-row" data-lb-day="' + d + '"><span class="label">' + (d === todayStr() ? 'Today' : shortDate(d)) + ' <small>' + r.shared + ' raced</small></span><span class="lb-day-score">' +
-            two.map((p, k) => avatar(p, k) + '<b>' + (r.wins[p] || 0) + '</b>').join('<i>–</i>') + (lead ? ' 👑' : '') + '</span></button>';
+            (!lead.length ? '–' : tie ? 'Tie' : '👑 ' + avatar(lead[0], colorOf(lead[0])) + '<b>' + who(lead[0]) + ' ' + r.wins[lead[0]] + '</b>') + (r.wins[me] && lead[0] !== me ? ' <small>you ' + r.wins[me] + '</small>' : '') + '</span></button>';
         }).join('') + '</div>';
       }
     } else {
-      const lvVals = pick(lv, (r) => r.level);
-      html += scoreCard((p) => (lv[p] ? lv[p].level : '–'), (p) => (lv[p] ? 'current level · ' + baseSize(lv[p].level) + '×' + baseSize(lv[p].level) : 'not shared yet'), crownOf(lvVals));
-      html += '<div class="group">' +
-        chipRow('Treats earned', pick(tr, (r) => r.levels), (v) => v + ' ' + treatSVG('treat inline-treat')) +
-        chipRow('Levels solved', pick(lv, (r) => r.solved), (v) => v) + '</div>';
+      // everyone ranked by all the treats they've earned
+      const totals = Object.fromEntries(players.map((p) => [p, tr[p] ? tr[p].total : 0]));
+      html += '<div class="group-foot center">All-time treats from levels and dailies</div>';
+      html += rankList(totals, (p) => (lv[p] ? 'Level ' + lv[p].level + ' · ' + baseSize(lv[p].level) + '×' + baseSize(lv[p].level) : 'not shared yet') + streakTxt(p),
+        (p) => totals[p] + ' ' + treatSVG('treat inline-treat'));
     }
+    if (players.length < 2) html += '<div class="group-foot center">Friends join with the same family code in Settings.</div>';
     html += '<button class="btn ghost lb-refresh" data-action="lb-refresh">Refresh</button>';
     html += '<div class="group-foot center">' + lbStatusText() + (save.lb.pending.length ? ' · ' + save.lb.pending.length + ' update(s) waiting to send' : '') + '</div>';
     body.innerHTML = html;
@@ -1948,11 +2049,12 @@
   }
   function homeLbSub() {
     if (!lbReady()) return 'Race each other on the dailies';
-    const { wins, players } = headToHead();
-    if (players.length < 2) return 'Waiting for a rival to join';
-    const lv = lbLevels(), rival = players.find((p) => p !== save.lb.name);
-    return players.slice(0, 2).map((p) => (p === save.lb.name ? 'You' : p) + ' ' + (wins[p] || 0)).join(' – ') + ' puzzles' + (rival && lv[rival] ? ' · ' + rival + ' on Level ' + lv[rival].level : '');
+    const players = lbPlayers();
+    if (players.length < 2) return 'Waiting for friends to join';
+    const wt = lbWeek(), n = wt[save.lb.name] || 0, pl = placeOf(wt, save.lb.name);
+    return (n ? 'You’re ' + ordinal(pl) + ' this week · ' + n + ' treats' : 'Earn treats to climb this week’s ranking') + ' · ' + players.length + ' players';
   }
+  const ordinal = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th');
 
   // ---------------------------------------------------------------- misc UI
   function showLoading(on) { $('#loading').hidden = !on; }
@@ -2001,10 +2103,10 @@
     const tp = e.target.closest('[data-theme-pick]');
     if (tp) { save.settings.theme = tp.dataset.themePick; persist(); applyTheme(); document.querySelectorAll('[data-theme-pick]').forEach((b) => b.classList.toggle('on', b === tp)); return; }
     const fs = e.target.closest('[data-free-size]');
-    if (fs) { save.settings.freeSize = +fs.dataset.freeSize; persist(); return openFreePlay(); }
+    if (fs) { save.settings.freeSize = Math.min(+fs.dataset.freeSize, freeMaxSize()); persist(); return openFreePlay(); }
     const fd = e.target.closest('[data-free-diff]');
     if (fd) { save.settings.freeDiff = fd.dataset.freeDiff; persist(); return openFreePlay(); }
-    if (e.target === $('#modal')) { if (G && !G.done && G.lives <= 0 && $('#screen-game').classList.contains('active')) return; return closeModal(); }
+    if (e.target === $('#modal')) { if (G && !G.done && G.lives <= 0 && $('#screen-game').classList.contains('active')) return; const cs = document.querySelector('#modal .chest-stage'); if (cs && !cs.classList.contains('open')) return revealChest(); return closeModal(); }
 
     const btn = e.target.closest('[data-action]');
     if (!btn) return;
@@ -2058,6 +2160,7 @@
       case 'start-over-no': closeModal(); if (G && G.lives <= 0) outOfTreats(); return;
       case 'clear-marks': closeModal(); return restart();
       case 'close-modal': return closeModal();
+      case 'chest-reveal': return revealChest();
       case 'win-next': return winNext();
       case 'reset-ask':
         return openModal('<h2>Reset everything?</h2><p>This erases all level progress, stars, and your daily streak on this device. It can\'t be undone.</p>' + actions([['Yes, reset', 'reset-do', 'danger'], ['Cancel', 'close-modal', 'ghost']]));
@@ -2146,7 +2249,7 @@
     const row = $('#drop-looks'); if (!row) return;
     row.classList.toggle('is-new', isNew);
     const tag = row.querySelector('.new-tag'); if (isNew && !tag) row.insertAdjacentHTML('beforeend', '<span class="new-tag">New</span>'); if (!isNew && tag) tag.remove();
-    const tip = $('#drop-tip'); if (isNew && !tip) row.insertAdjacentHTML('afterend', '<div class="drop-tip" id="drop-tip">Your new background is waiting here 🧶</div>'); if (!isNew && tip) tip.remove();
+    const tip = $('#drop-tip'); if (tip) tip.remove();
   }
   // ---------------------------------------------------------------- Looks screen
   let looksTab = 'bg', looksSel = null;
