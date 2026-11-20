@@ -474,7 +474,13 @@ html:not(.dark) .modal-card { background: rgba(255,255,255,.92); }
 .win-badge b { font-size: 14px; font-weight: 600; }
 .win { -webkit-backdrop-filter: blur(18px) saturate(140%); backdrop-filter: blur(18px) saturate(140%);
   background: radial-gradient(circle at 50% 30%, rgba(255,185,56,.42), rgba(0,0,0,.88) 70%); overflow-y: auto; }
-.win-card { max-height: 100%; }
+/* the card scrolls when it's busy (scrap, achievements, streak…); Next level and Home stay pinned in view,
+   clear of the phone's home-indicator strip */
+.win { display: flex; flex-direction: column; align-items: center; padding: max(20px, env(safe-area-inset-top)) 20px 0; }
+.win-card { margin: auto 0; flex-shrink: 0; }
+.win-actions { position: sticky; bottom: 0; display: flex; flex-direction: column; gap: 4px; margin: 4px -20px 0; padding: 14px 20px max(16px, calc(env(safe-area-inset-bottom) + 8px));
+  background: linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,.72) 26%); }
+.win-actions .link-btn { min-height: 44px; }
 .win.busy .win-face { width: 128px; height: 128px; }
 .win.busy .win-card { gap: 10px; }
 .win.busy .win-card h2 { font-size: 28px; margin-top: 4px; }
@@ -591,7 +597,7 @@ html.dark .level-tile.golden small { color: #FFD45C; }
 .win.golden .win-face { box-shadow: 0 0 0 6px #FFC93C, 0 0 70px rgba(255, 201, 60, .95); }
 .ach-cat { display: flex; justify-content: space-between; }
 .ach-cat span:last-child { font-variant-numeric: tabular-nums; }
-.lb-tabs { grid-template-columns: 1fr 1fr; margin: 10px 0 2px; }
+.lb-tabs { grid-template-columns: 1fr 1fr 1fr; margin: 10px 0 2px; }
 .lb-tabs .choice { font-size: 14px; padding: 8px 0; }
 
 /* ---------- instant blurred previews while pictures load ---------- */
@@ -924,3 +930,22 @@ html.dark .jr-page { filter: brightness(.92); }
 .jr-legend .mk { transform: none; }
 .jr-page h4.jr-toc-h { margin-bottom: 8px; }
 .jr-toc-wrap { height: calc(100% + 14px); overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; margin-right: -8px; padding-right: 8px; }
+
+/* win screen: treats in place of stars */
+.stars { display: flex; justify-content: center; gap: 10px; letter-spacing: 0; }
+.stars span { width: 48px; height: 44px; }
+.stars .off .treat { opacity: .22; filter: grayscale(1); }
+.stars.golden .treat .tb { fill: #F4BE3E; stroke: #9C6512; }
+.stars.golden .treat { filter: drop-shadow(0 0 6px rgba(255, 190, 40, .7)); }
+/* weekly treats ranking */
+.lb-rank-row { display: flex; align-items: center; gap: 10px; }
+.lb-rank-row .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lb-rank-row.me { background: rgba(42,157,150,.08); }
+.lb-place { width: 26px; text-align: center; font-weight: 700; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.lb-rank-n { display: inline-flex; align-items: center; gap: 5px; font-size: 17px; font-variant-numeric: tabular-nums; }
+.lb-rank-n svg.treat.inline-treat { width: 22px; height: 20px; }
+.week-prizes { display: flex; justify-content: center; gap: 8px; margin: 2px 0 8px; flex-wrap: wrap; }
+.week-prizes span { display: inline-flex; align-items: center; gap: 4px; background: var(--card); box-shadow: var(--shadow-1); border-radius: 999px; padding: 4px 10px; font-size: 13px; font-weight: 600; }
+.week-prizes svg.treat.inline-treat { width: 18px; height: 16px; }
+.lb-place { font-size: 15px; }
+.week-prize-icon { font-size: 56px; text-align: center; line-height: 1; margin-top: 4px; }
