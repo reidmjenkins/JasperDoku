@@ -86,6 +86,13 @@ html[data-looks].dark[data-bg="stars"] { --bg: #1D1B29 !important; --bg-paws: ur
 html[data-looks][data-bg="blanket"] { --bg: #E7DFD3 !important; --bg-paws: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'><g fill='%23D5C6B2' opacity='.55'><rect x='0' y='28' width='160' height='26'/><rect x='28' y='0' width='26' height='160'/><rect x='0' y='108' width='160' height='12'/><rect x='108' y='0' width='12' height='160'/></g><g stroke='%23C2AE94' stroke-width='1.6' stroke-dasharray='4 4' opacity='.8'><path d='M0 41h160M41 0v160M0 114h160M114 0v160'/></g></svg>") !important; }
 html[data-looks].dark[data-bg="blanket"] { --bg: #25201C !important; --bg-paws: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'><g fill='%23342B25' opacity='.55'><rect x='0' y='28' width='160' height='26'/><rect x='28' y='0' width='26' height='160'/><rect x='0' y='108' width='160' height='12'/><rect x='108' y='0' width='12' height='160'/></g><g stroke='%2345392F' stroke-width='1.6' stroke-dasharray='4 4' opacity='.8'><path d='M0 41h160M41 0v160M0 114h160M114 0v160'/></g></svg>") !important; }
 html[data-looks] body { background: var(--bg-paws) 0 0 / 160px 160px, var(--bg); }
+/* room visits (switched off for now) */
+.v-sub { color: var(--sub); font-size: 14px; margin-top: -8px; }
+.visits { display: grid; gap: 8px; }
+.visits .v-h { font-size: 13px; font-weight: 600; color: var(--sub); }
+.visits .v-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.visits a { background: var(--card); color: var(--accent); font-weight: 600; font-size: 15px; text-decoration: none; padding: 8px 14px; border-radius: 999px; }
+body.visiting .balance, body.visiting #tabs, body.visiting #banner, body.visiting #grid { display: none !important; }
 @media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
 </style>
 
@@ -95,6 +102,7 @@ html[data-looks] body { background: var(--bg-paws) 0 0 / 160px 160px, var(--bg);
     <h1>Jasper's Room</h1>
     <span class="balance" title="Treats to spend"><svg class="treat" viewBox="0 0 40 36" aria-hidden="true"><path class="tb" d="M7.5 8.6C11 5.2 29 5.2 32.5 8.6c3.6 3.9 3.6 14.9 0 18.8-3.5 3.4-21.5 3.4-25 0-3.6-3.9-3.6-14.9 0-18.8Z"/><path class="ts" d="M4.9 19.2c.3 3.7 1.2 6.6 2.6 8.2 3.5 3.4 21.5 3.4 25 0 1.4-1.6 2.3-4.5 2.6-8.2-1.1 4.6-3 6.9-5.4 7.7-4.8 1.6-14.6 1.6-19.4 0-2.4-.8-4.3-3.1-5.4-7.7Z"/><path class="tc" d="M10 11.2c5-1.6 15-1.6 20 0M10 24.8c5 1.6 15 1.6 20 0"/><ellipse class="th" cx="15.5" cy="13.6" rx="6.5" ry="2.4" transform="rotate(-8 15.5 13.6)"/><circle class="tk" cx="24.5" cy="16.5" r=".9"/><circle class="tk" cx="13" cy="20.5" r=".8"/><circle class="tk" cx="21" cy="21.8" r=".7"/><circle class="tk" cx="28" cy="21" r=".7"/></svg><span id="bal">142</span></span>
   </header>
+  <div class="v-sub" id="vsub" hidden></div>
 
   <div class="stage">
     <canvas id="room" width="800" height="800" aria-label="Jasper's room. Tap Jasper to pet him, or tap a spot to call him over."></canvas>
@@ -106,12 +114,15 @@ html[data-looks] body { background: var(--bg-paws) 0 0 / 160px 160px, var(--bg);
     <div class="seg" role="group" aria-label="Time of day preview"><button id="tDay">Day</button><button id="tNight">Night</button></div>
   </div>
 
+  <div class="visits" id="visits" hidden></div>
+
   <div class="tabs" id="tabs" role="tablist"></div>
   <div class="banner" id="banner"><span class="flake" aria-hidden="true">❄</span><span><b>Winter collection</b><small>Available until January 6. Anything you buy is yours to keep.</small></span></div>
   <div class="grid" id="grid"></div>
 
 </div>
 
+<script src="js/config.js"></script>
 <script>
 (() => {
 'use strict';
@@ -507,16 +518,63 @@ const S = {
   slot: Object.assign({ bed: 'cushion', hat: null, neck: null, toy: null }, R0.slot || {}),
 };
 for (const k of Object.keys(S.slot)) if (S.slot[k] && !byId[S.slot[k]]) S.slot[k] = k === 'bed' ? 'cushion' : null;
+// ---------- room visits: built, but switched off until the family is ready (then run supabase/rooms.sql)
+const VISITS_ON = false;
+const CFG = window.JASPER_CONFIG || {}, LB = G0.lb || {};
+const visitsReady = VISITS_ON && !!(CFG.supabaseUrl && CFG.supabaseKey && LB.name && LB.room);
+const VISIT = visitsReady ? (new URLSearchParams(location.search).get('visit') || '').slice(0, 24) : '';
+const ROOMS_KEY = 'jasperdoku.rooms', SENT_KEY = 'jasperdoku.roomSent';
+function cachedRooms() { try { return JSON.parse(localStorage.getItem(ROOMS_KEY)) || {}; } catch (e) { return {}; } }
+// someone else's room: only items this version of the game knows about, each in its proper place
+function applyLayout(lay) {
+  lay = lay || {};
+  S.on = new Set((Array.isArray(lay.on) ? lay.on : []).filter((id) => byId[id] && !byId[id].slot));
+  for (const k of Object.keys(S.slot)) S.slot[k] = k === 'bed' ? 'cushion' : null;
+  for (const [k, id] of Object.entries(lay.slot || {})) if (byId[id] && byId[id].slot === k) S.slot[k] = id;
+}
+if (VISIT) { applyLayout(null); const c = cachedRooms()[VISIT]; if (c) applyLayout(c.layout); }
+async function rpc(fn, body) {
+  const headers = { 'Content-Type': 'application/json', apikey: CFG.supabaseKey };
+  if (!/^sb_/.test(CFG.supabaseKey)) headers.Authorization = 'Bearer ' + CFG.supabaseKey;
+  const res = await fetch(CFG.supabaseUrl.replace(/\/$/, '') + '/rest/v1/rpc/' + fn, { method: 'POST', headers, body: JSON.stringify(body) });
+  const text = await res.text();
+  if (!res.ok) throw new Error(text || res.status);
+  return text ? JSON.parse(text) : null;
+}
+// share my room: just the item names, sent only when something changed
+let shareT;
+function shareRoom() {
+  if (!visitsReady || VISIT) return;
+  clearTimeout(shareT);
+  shareT = setTimeout(async () => {
+    const lay = { v: 1, on: [...S.on], slot: Object.assign({}, S.slot), level: G0.level || 1 };
+    const key = LB.room + '|' + LB.name + '|' + JSON.stringify(lay);
+    let sent = ''; try { sent = localStorage.getItem(SENT_KEY) || ''; } catch (e) { /* blocked */ }
+    if (sent === key) return;
+    try { await rpc('save_room', { p_room: LB.room, p_player: LB.name, p_layout: lay }); try { localStorage.setItem(SENT_KEY, key); } catch (e) { /* blocked */ } }
+    catch (e) { /* offline: it goes next time the room opens */ }
+  }, 1200);
+}
+async function loadRooms() {
+  try {
+    const rows = await rpc('get_rooms', { p_room: LB.room }), m = {};
+    for (const r of rows || []) m[r.player] = { layout: r.layout, at: r.updated_at };
+    try { localStorage.setItem(ROOMS_KEY, JSON.stringify(m)); } catch (e) { /* blocked */ }
+    return m;
+  } catch (e) { return null; }
+}
 const showWinter = winterOn() || ITEMS.some((i) => i.cat === 'holiday' && S.owned.has(i.id));
 if (!showWinter) CATS.splice(CATS.findIndex((c) => c[0] === 'holiday'), 1);
 S.tab = showWinter ? 'holiday' : 'beds';
 // winter items can only be bought in season; ones already owned stay usable
 const forSale = (it) => it.cat !== 'holiday' || winterOn() || S.owned.has(it.id);
 function saveRoom(spent) {
+  if (VISIT) return;   // never save while looking at someone else's room
   const g = loadGame(); g.room = g.room || {};
   g.room.owned = [...new Set([...(g.room.owned || []), ...[...S.owned].filter((i) => i !== 'cushion')])];
   g.room.on = [...S.on]; g.room.slot = S.slot; g.room.spent = (g.room.spent || 0) + (spent || 0);
   try { localStorage.setItem(GAME_KEY, JSON.stringify(g)); } catch (e) { /* storage full or blocked */ }
+  shareRoom();
 }
 S.night = false;   // the room always opens in daytime; the Night button switches it
 function owns(id) { const it = byId[id]; return it.slot ? S.slot[it.slot] === id : S.on.has(id); }
@@ -1099,6 +1157,39 @@ function equip(it, on) {
     on ? S.on.add(it.id) : S.on.delete(it.id); if (on && it.id === 'post') goTo(POST.x + 46 * M(POST.y), POST.y, 'scratch'); if (on && it.id === 'scratcher') goTo(SCR.x, SCR.y, 'stretch'); }
 }
 renderShop();
+
+// ---------- room visits UI (only when switched on)
+const visitsEl = document.getElementById('visits'), vsubEl = document.getElementById('vsub');
+const escHtml = (t) => String(t).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+function ago(at) {
+  const m = Math.max(0, Math.round((Date.now() - new Date(at)) / 60000));
+  return m < 2 ? 'just now' : m < 60 ? m + ' minutes ago' : m < 120 ? '1 hour ago' : m < 1440 ? Math.round(m / 60) + ' hours ago' : m < 2880 ? 'yesterday' : Math.round(m / 1440) + ' days ago';
+}
+function renderVisits(m) {
+  const names = Object.keys(m || {}).filter((n) => n !== LB.name).sort((a, b) => a.localeCompare(b));
+  visitsEl.hidden = !names.length;
+  visitsEl.innerHTML = '<div class="v-h">Family rooms</div><div class="v-list">' + names.map((n) => '<a href="room.html?visit=' + encodeURIComponent(n) + '">' + escHtml(n) + '</a>').join('') + '</div>';
+}
+if (VISIT) {
+  document.body.classList.add('visiting');
+  document.querySelector('h1').textContent = VISIT + '’s Room';
+  document.title = VISIT + '’s Room';
+  const back = document.querySelector('.back'); back.href = 'room.html'; back.lastChild.textContent = 'My room';
+  document.querySelector('.hint').textContent = 'Tap Jasper to pet him.';
+  vsubEl.hidden = false; vsubEl.textContent = 'Loading…';
+  const show = (m) => {
+    if (!m) { if (vsubEl.textContent === 'Loading…') vsubEl.textContent = 'Can’t connect right now'; return; }
+    const r = m[VISIT];
+    if (r) { applyLayout(r.layout); vsubEl.textContent = 'Level ' + ((r.layout && r.layout.level) || 1) + ' · changed ' + ago(r.at); }
+    else vsubEl.textContent = VISIT + ' hasn’t shared a room yet';
+  };
+  const c = cachedRooms(); if (c[VISIT]) show(c);
+  loadRooms().then(show);
+} else if (visitsReady) {
+  renderVisits(cachedRooms());
+  loadRooms().then((m) => { if (m) renderVisits(m); });
+  shareRoom();
+}
 })();
 </script>
 
