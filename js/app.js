@@ -1748,6 +1748,23 @@
     persist();
     lbSync();
   }
+  // share the room too, so each house on Jasper's Street fills in without opening the room
+  // (same keys and rules as room.html: one name per device, only sent when something changed)
+  async function shareRoomFromGame() {
+    const r = save.room || {};
+    const lay = { v: 1, on: Array.isArray(r.on) ? r.on : [], slot: Object.assign({}, r.slot || { bed: 'cushion' }), level: save.level || 1 };
+    const key = save.lb.room + '|' + save.lb.name + '|' + JSON.stringify(lay);
+    let sent = '', dev = '';
+    try { sent = localStorage.getItem('jasperdoku.roomSent') || ''; dev = localStorage.getItem('jasperdoku.deviceKey') || ''; } catch (e) { return; }
+    if (sent === key) return;
+    if (!/^[\w-]{16,64}$/.test(dev)) {
+      dev = crypto.randomUUID ? crypto.randomUUID() : [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join('');
+      localStorage.setItem('jasperdoku.deviceKey', dev);
+    }
+    const res = await rpc('save_room', { p_room: save.lb.room, p_player: save.lb.name, p_layout: lay, p_device: dev });
+    if (res === 'taken') { localStorage.setItem('jasperdoku.nameTaken', save.lb.name); return; }
+    localStorage.setItem('jasperdoku.roomSent', key); localStorage.removeItem('jasperdoku.nameTaken');
+  }
   let lbBusy = null;
   function lbSync(force) {
     if (!lbReady()) return Promise.resolve(false);
@@ -1790,6 +1807,7 @@
           if (p.weekKey) save.lb.sentWeek = p.weekKey;
           save.lb.pending.shift(); persist();
         }
+        try { await shareRoomFromGame(); } catch (e) { /* the room goes next time */ }
         const rows = await rpc('get_scores', { p_room: save.lb.room, p_since: save.lb.since || '1970-01-01T00:00:00Z' });
         if (rows && rows.length) {
           save.lb.rows = save.lb.rows.concat(rows.map((r) => [r.player, r.puzzle, r.time_sec, r.mistakes, r.hints, r.created_at]));
