@@ -1,4 +1,4 @@
--- JasperDoku room visits - NOT RUN YET. Run it once, when room visits are switched on:
+-- JasperDoku room visits - already run (2026-11-24). Only needed again for a fresh Supabase project.
 -- Supabase: SQL Editor -> New query -> paste -> Run. Needs setup.sql to have been run first.
 --
 -- Each player's room is saved as a short list of item names (what's placed, what

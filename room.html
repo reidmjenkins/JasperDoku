@@ -86,7 +86,7 @@ html[data-looks].dark[data-bg="stars"] { --bg: #1D1B29 !important; --bg-paws: ur
 html[data-looks][data-bg="blanket"] { --bg: #E7DFD3 !important; --bg-paws: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'><g fill='%23D5C6B2' opacity='.55'><rect x='0' y='28' width='160' height='26'/><rect x='28' y='0' width='26' height='160'/><rect x='0' y='108' width='160' height='12'/><rect x='108' y='0' width='12' height='160'/></g><g stroke='%23C2AE94' stroke-width='1.6' stroke-dasharray='4 4' opacity='.8'><path d='M0 41h160M41 0v160M0 114h160M114 0v160'/></g></svg>") !important; }
 html[data-looks].dark[data-bg="blanket"] { --bg: #25201C !important; --bg-paws: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'><g fill='%23342B25' opacity='.55'><rect x='0' y='28' width='160' height='26'/><rect x='28' y='0' width='26' height='160'/><rect x='0' y='108' width='160' height='12'/><rect x='108' y='0' width='12' height='160'/></g><g stroke='%2345392F' stroke-width='1.6' stroke-dasharray='4 4' opacity='.8'><path d='M0 41h160M41 0v160M0 114h160M114 0v160'/></g></svg>") !important; }
 html[data-looks] body { background: var(--bg-paws) 0 0 / 160px 160px, var(--bg); }
-/* room visits (switched off for now) */
+/* room visits */
 .v-sub { color: var(--sub); font-size: 14px; margin-top: -8px; }
 .v-sub.warn { color: #B4532A; font-weight: 600; }
 .visits { display: grid; gap: 8px; }
@@ -784,8 +784,8 @@ const S = {
   slot: Object.assign({ bed: 'cushion', hat: null, neck: null, toy: null }, R0.slot || {}),
 };
 for (const k of Object.keys(S.slot)) if (S.slot[k] && !byId[S.slot[k]]) S.slot[k] = k === 'bed' ? 'cushion' : null;
-// ---------- room visits: built, but switched off until the family is ready (then run supabase/rooms.sql)
-const VISITS_ON = false;
+// ---------- room visits: on for everyone (supabase/rooms.sql has been run)
+const VISITS_ON = true;
 const CFG = window.JASPER_CONFIG || {}, LB = G0.lb || {};
 // test switch: open room.html?visits=on on a device to try visits there before they're on for everyone
 // (room.html?visits=off turns it back off). Only that device sees the Street and shares its room.
