@@ -88,6 +88,7 @@ html[data-looks].dark[data-bg="blanket"] { --bg: #25201C !important; --bg-paws: 
 html[data-looks] body { background: var(--bg-paws) 0 0 / 160px 160px, var(--bg); }
 /* room visits (switched off for now) */
 .v-sub { color: var(--sub); font-size: 14px; margin-top: -8px; }
+.v-sub.warn { color: #B4532A; font-weight: 600; }
 .visits { display: grid; gap: 8px; }
 .visits .v-h { font-size: 13px; font-weight: 600; color: var(--sub); }
 .visits .v-list { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -786,9 +787,36 @@ for (const k of Object.keys(S.slot)) if (S.slot[k] && !byId[S.slot[k]]) S.slot[k
 // ---------- room visits: built, but switched off until the family is ready (then run supabase/rooms.sql)
 const VISITS_ON = false;
 const CFG = window.JASPER_CONFIG || {}, LB = G0.lb || {};
-const visitsReady = VISITS_ON && !!(CFG.supabaseUrl && CFG.supabaseKey && LB.name && LB.room);
+// test switch: open room.html?visits=on on a device to try visits there before they're on for everyone
+// (room.html?visits=off turns it back off). Only that device sees the Street and shares its room.
+const VISITS_TEST_KEY = 'jasperdoku.visitsTest';
+let visitsTest = false;
+try {
+  const q = new URLSearchParams(location.search).get('visits');
+  if (q === 'on') localStorage.setItem(VISITS_TEST_KEY, '1');
+  if (q === 'off') localStorage.removeItem(VISITS_TEST_KEY);
+  visitsTest = localStorage.getItem(VISITS_TEST_KEY) === '1';
+} catch (e) { /* blocked */ }
+const visitsReady = (VISITS_ON || visitsTest) && !!(CFG.supabaseUrl && CFG.supabaseKey && LB.name && LB.room);
 const VISIT = visitsReady ? (new URLSearchParams(location.search).get('visit') || '').slice(0, 24) : '';
 const ROOMS_KEY = 'jasperdoku.rooms', SENT_KEY = 'jasperdoku.roomSent', TAPPED_KEY = 'jasperdoku.streetTapped', SEEN_KEY = 'jasperdoku.streetSeen';
+const DEVICE_KEY = 'jasperdoku.deviceKey', TAKEN_KEY = 'jasperdoku.nameTaken';
+// each device gets its own random key the first time it shares; the first device to share a name keeps it,
+// so two devices can never save over each other's room by using the same name
+function deviceKey() {
+  let k = ''; try { k = localStorage.getItem(DEVICE_KEY) || ''; } catch (e) { /* blocked */ }
+  if (!/^[\w-]{16,64}$/.test(k)) {
+    k = crypto.randomUUID ? crypto.randomUUID() : [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join('');
+    try { localStorage.setItem(DEVICE_KEY, k); } catch (e) { /* blocked */ }
+  }
+  return k;
+}
+function nameTaken() { try { return localStorage.getItem(TAKEN_KEY) === LB.name; } catch (e) { return false; } }
+function takenNote() {
+  if (VISIT || !nameTaken()) return;
+  const el = document.getElementById('vsub'); el.hidden = false; el.classList.add('warn');
+  el.textContent = 'Another device already shares a room as ' + LB.name + '. To share this room, change your name in Settings.';
+}
 const STREET = visitsReady && !VISIT && new URLSearchParams(location.search).has('street');
 // street picture: houses top-left, top-right, middle-left, middle-right, bottom-left, bottom-right
 const HOUSES = [[25, 26], [77, 19], [24, 53], [68, 43], [22, 84], [84, 86]];
@@ -821,7 +849,12 @@ function shareRoom() {
     const key = LB.room + '|' + LB.name + '|' + JSON.stringify(lay);
     let sent = ''; try { sent = localStorage.getItem(SENT_KEY) || ''; } catch (e) { /* blocked */ }
     if (sent === key) return;
-    try { await rpc('save_room', { p_room: LB.room, p_player: LB.name, p_layout: lay }); try { localStorage.setItem(SENT_KEY, key); } catch (e) { /* blocked */ } }
+    try {
+      const res = await rpc('save_room', { p_room: LB.room, p_player: LB.name, p_layout: lay, p_device: deviceKey() });
+      if (res === 'taken') { try { localStorage.setItem(TAKEN_KEY, LB.name); } catch (e) { /* blocked */ } takenNote(); return; }
+      try { localStorage.setItem(SENT_KEY, key); localStorage.removeItem(TAKEN_KEY); } catch (e) { /* blocked */ }
+      const el = document.getElementById('vsub'); if (el.classList.contains('warn')) { el.classList.remove('warn'); el.hidden = !STREET; if (STREET) el.textContent = 'Tap a house to visit'; }
+    }
     catch (e) { /* offline: it goes next time the room opens */ }
   }, 1200);
 }
@@ -1519,6 +1552,7 @@ if (VISIT) {
   sb.addEventListener('click', () => { try { localStorage.setItem(TAPPED_KEY, '1'); } catch (e) { /* blocked */ } });
   loadRooms();
   shareRoom();
+  takenNote();
 }
 // ---------- Jasper's Street: the Map's houses, each roof in a player's leaderboard color
 function streetPlayers(m) {
@@ -1573,6 +1607,7 @@ function showStreet() {
   draw();
   loadRooms().then((m) => { if (m) { rooms = m; draw(); } });
   shareRoom();
+  takenNote();
 }
 })();
 </script>
