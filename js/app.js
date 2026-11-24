@@ -1949,7 +1949,7 @@
     });
     return { wins, dayWins, shared, players, best };
   }
-  const avatar = (name, k) => '<span class="lb-av" style="--c:' + ['#2A9D96', '#F58BB4', '#8CB8F5', '#FFB938'][k % 4] + '">' + escapeHtml((name || '?').charAt(0).toUpperCase()) + '</span>';
+  const avatar = (name, k) => '<span class="lb-av" style="--c:' + ['#2A9D96', '#F58BB4', '#8CB8F5', '#FFB938', '#B79BF2', '#FF7F6B'][k % 6] + '">' + escapeHtml((name || '?').charAt(0).toUpperCase()) + '</span>';
 
   let lbDay = todayStr();
   function openLeaderboard() { lbDay = todayStr(); save.lb.tab = 'week'; renderLeaderboard(); showScreen('leaderboard'); lbSync().then((ok) => { if (ok) renderLeaderboard(); }); }
