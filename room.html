@@ -1191,6 +1191,9 @@ ITEMS.push({ id: 'menorah', cat: 'holiday', name: 'Menorah', desc: 'Brass, nine 
 CARRY.push('menorah');
 const parentOf = (it) => it.parent || (it.parentIn || {})[place()];
 const conflictsOf = (it) => (it.conflictsIn ? it.conflictsIn[place()] : it.conflicts) || [];
+for (const [a, b] of [['mirror', 'steps'], ['steps', 'mirror']]) { const it = ITEMS.find((i) => i.id === a); if (it) it.conflicts = [...(it.conflicts || []), b]; }
+// a saved room from before they swapped may have both out: keep the steps
+function oneWall(on) { if (on.has('steps')) on.delete('mirror'); return on; }
 const byId = Object.fromEntries(ITEMS.map((i) => [i.id, i]));
 // spots that move from room to room: the shop picture's frame is worked out each time
 for (const it of ITEMS) {
@@ -1205,7 +1208,7 @@ function winterOn() { const h = (G0.settings && G0.settings.holiday) || 'auto'; 
 const S = {
   bal: Math.max(0, (G0.jarEarned || 0) - (R0.spent || 0)), tab: 'beds', night: false,
   owned: new Set(['cushion', 'room-cabin', ...(R0.owned || [])]),
-  on: new Set((R0.on || []).filter((id) => byId[id])),
+  on: oneWall(new Set((R0.on || []).filter((id) => byId[id]))),
   slot: Object.assign({ bed: 'cushion', hat: null, neck: null, toy: null, place: 'room-cabin' }, R0.slot || {}),
 };
 for (const k of Object.keys(S.slot)) if (S.slot[k] && !byId[S.slot[k]]) S.slot[k] = k === 'bed' ? 'cushion' : k === 'place' ? 'room-cabin' : null;
@@ -1253,7 +1256,7 @@ function cachedRooms() { try { return JSON.parse(localStorage.getItem(ROOMS_KEY)
 // someone else's room: only items this version of the game knows about, each in its proper place
 function applyLayout(lay) {
   lay = lay || {};
-  S.on = new Set((Array.isArray(lay.on) ? lay.on : []).filter((id) => byId[id] && !byId[id].slot));
+  S.on = oneWall(new Set((Array.isArray(lay.on) ? lay.on : []).filter((id) => byId[id] && !byId[id].slot)));
   for (const k of Object.keys(S.slot)) S.slot[k] = k === 'bed' ? 'cushion' : k === 'place' ? 'room-cabin' : null;
   for (const [k, id] of Object.entries(lay.slot || {})) if (byId[id] && byId[id].slot === k) S.slot[k] = id;
   fitPlace();
