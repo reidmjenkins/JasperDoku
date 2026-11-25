@@ -43,6 +43,12 @@ canvas#room { display: block; width: 100%; height: auto; touch-action: manipulat
 .ctrls { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
 .roomBtn { border: 0; background: var(--card-2); color: var(--label); font: 600 13px var(--font); padding: 8px 12px; border-radius: 9px; cursor: pointer; }
 .roomBtn[aria-expanded="true"] { background: var(--card); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+.peek { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; background: rgba(0,0,0,.72); cursor: pointer; }
+.peek[hidden] { display: none; }
+.peek img { width: min(92vw, 560px); aspect-ratio: 1; border-radius: 18px; box-shadow: 0 10px 40px rgba(0,0,0,.5); background: #222; object-fit: cover; }
+.peek div { color: #fff; font: 600 17px var(--font); text-align: center; }
+.peek small { display: block; color: rgba(255,255,255,.7); font: 400 13px var(--font); margin-top: 4px; }
+.item.peekable { cursor: pointer; }
 .cabinet { background: var(--card-2); border-radius: 14px; padding: 10px; box-shadow: inset 0 0 0 .5px var(--sep); }
 .cabinet .cab-head { font: 600 13px var(--font); color: var(--sub); text-transform: uppercase; letter-spacing: .04em; padding: 2px 6px 8px; }
 .seg { display: inline-flex; background: var(--card-2); border-radius: 9px; padding: 2px; gap: 2px; }
@@ -165,6 +171,7 @@ body.on-street #cabinet, body.on-street .balance, body.on-street .stage, body.on
     <div class="ctrls"><button class="roomBtn" id="roomBtn" aria-expanded="false" aria-controls="cabinet">Rooms <span aria-hidden="true">▾</span></button><div class="seg" role="group" aria-label="Time of day preview"><button id="tDay">Day</button><button id="tNight">Night</button></div></div>
   </div>
   <div class="cabinet" id="cabinet" hidden><div class="cab-head">Rooms</div><div class="grid" id="roomsGrid"></div></div>
+  <div class="peek" id="peek" hidden role="dialog" aria-label="Room preview"><img id="peekImg" alt=""><div><span id="peekName"></span><small>Tap anywhere to close</small></div></div>
 
   <div class="visits" id="visits" hidden></div>
 
@@ -2002,6 +2009,7 @@ function fillCards(gridEl, list) {
   gridEl.innerHTML = '';
   for (const it of list) {
     const card = document.createElement('div'); card.className = 'item';
+    if (peekSrc(it)) { card.classList.add('peekable'); card.dataset.peek = it.id; }
     card.appendChild(thumb(it));
     const tx = document.createElement('div'); tx.className = 'txt'; card.appendChild(tx);
     const name = document.createElement('div'); name.className = 'name'; name.textContent = it.name; tx.appendChild(name);
@@ -2026,8 +2034,17 @@ function fillCards(gridEl, list) {
   }
 }
 tabsEl.addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (!b) return; S.tab = b.dataset.tab; renderShop(); });
+// a room you haven't moved into: tap its card to see it empty
+const peekEl = document.getElementById('peek');
+function peekSrc(it) { const k = it.id.replace(/^room-/, ''); return it.slot === 'place' && k !== place() && (PLACES[k] || {}).src; }
+peekEl.onclick = () => { peekEl.hidden = true; };
+addEventListener('keydown', (e) => { if (e.key === 'Escape') peekEl.hidden = true; });
 const onCard = (e) => {
-  const b = e.target.closest('button[data-id]'); if (!b || b.disabled) return;
+  const b = e.target.closest('button[data-id]');
+  if (!b) { const c = e.target.closest('[data-peek]'); if (!c) return; const it = byId[c.dataset.peek];
+    document.getElementById('peekImg').src = peekSrc(it); document.getElementById('peekImg').alt = it.name;
+    document.getElementById('peekName').textContent = it.name; peekEl.hidden = false; return; }
+  if (b.disabled) return;
   const it = byId[b.dataset.id];
   if (it.use) { if (it.price > S.bal || nip.t > 0) return; S.bal -= it.price; saveRoom(it.price); zoomies(); toast('Catnip! Here come the zoomies'); renderShop(); setTimeout(renderShop, 26000); return; }
   if (!S.owned.has(it.id)) { if (it.price > S.bal) return; S.bal -= it.price; S.owned.add(it.id); toast(it.name + ' is yours'); hearts.push({ x: J.x, y: J.y - 150 * M(J.y), s: 34 * M(J.y), life: 1.6 }); equip(it, true); saveRoom(it.price); }
