@@ -2295,12 +2295,12 @@
     const L = looksSave(), tab = looksTab, list = LOOKS[tab];
     if (!lookItem(tab, looksSel)) looksSel = tab === 'bg' ? L.bg : L.pal;
     const sel = lookItem(tab, looksSel), owned = L.owned.includes(sel.id), using = (tab === 'bg' ? L.bg : L.pal) === sel.id, bal = treatJar();
-    $('#looks-bal').textContent = '🍪 ' + bal + ' treats';
+    $('#looks-bal').innerHTML = treatSVG('treat inline-treat') + ' ' + bal + ' treats';
     const bgId = tab === 'bg' ? sel.id : L.bg, colors = tab === 'pal' ? sel.colors : PALETTE;
     let act;
     if (using) act = '<button class="btn ghost" disabled>Using this one</button>';
     else if (owned) act = '<button class="btn primary" data-action="looks-use">Use this ' + (tab === 'bg' ? 'background' : 'color set') + '</button>';
-    else act = '<button class="btn primary" data-action="looks-buy"' + (bal < sel.price ? ' disabled' : '') + '>Buy for 🍪 ' + sel.price + '</button>';
+    else act = '<button class="btn primary" data-action="looks-buy"' + (bal < sel.price ? ' disabled' : '') + '>Buy for ' + treatSVG('treat inline-treat') + ' ' + sel.price + '</button>';
     const note = !owned && bal < sel.price ? 'You need ' + (sel.price - bal) + ' more treats. Solve levels to earn them.' : '';
     $('#looks-body').innerHTML =
       '<div class="looks-seg" role="tablist"><button data-action="looks-tab" data-tab="bg" class="' + (tab === 'bg' ? 'on' : '') + '">Backgrounds</button><button data-action="looks-tab" data-tab="pal" class="' + (tab === 'pal' ? 'on' : '') + '">Colors</button></div>' +
@@ -2309,7 +2309,7 @@
       '<div class="looks-grid">' + list.map((it) => {
         const u = (tab === 'bg' ? L.bg : L.pal) === it.id, o = L.owned.includes(it.id);
         const sw = tab === 'bg' ? '<div class="sw bgp bgp-' + it.id + '"></div>' : '<div class="sw strip">' + it.colors.map((c) => '<i style="background:' + c.hex + '"></i>').join('') + '</div>';
-        return '<button class="look-item' + (it.id === sel.id ? ' sel' : '') + '" data-action="looks-pick" data-look="' + it.id + '">' + sw + it.name + '<small class="' + (u ? 'using' : o ? 'owned' : '') + '">' + (u ? 'Using' : o ? 'Owned' : '🍪 ' + it.price) + '</small></button>';
+        return '<button class="look-item' + (it.id === sel.id ? ' sel' : '') + '" data-action="looks-pick" data-look="' + it.id + '">' + sw + it.name + '<small class="' + (u ? 'using' : o ? 'owned' : '') + '">' + (u ? 'Using' : o ? 'Owned' : treatSVG('treat inline-treat') + ' ' + it.price) + '</small></button>';
       }).join('') + '</div>';
   }
   function looksUse() {
