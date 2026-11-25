@@ -1151,12 +1151,12 @@
     $('#home-size').textContent = size + ' × ' + size;
     $('#home-date').textContent = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
     $('#home-lb-sub').textContent = homeLbSub();
-    { const el = $('#home-room-sub'); if (el) el.textContent = treatJar() + ' treats to spend'; }
+    { const el = $('#home-room-sub'); if (el) el.textContent = (save.lb.giftsWaiting ? (save.lb.giftsWaiting > 1 ? 'Gifts' : 'A gift') + ' for Jasper! · ' : '') + treatJar() + ' treats to spend'; }
     $('#home-ach-sub').textContent = Object.keys(save.achievements).length + ' of ' + ACHIEVEMENTS.length + ' unlocked';
   }
   // ---------------------------------------------------------------- level path & chests
   const COSMETICS = {
-    crown: 'Little crown', bow: 'Pink bow', party: 'Party hat', post: 'Scratching post', scratcher: 'Cardboard scratcher',
+    crown: 'Little crown', party: 'Party hat', post: 'Scratching post', scratcher: 'Cardboard scratcher',
     yarn: 'Yarn ball', mouse: 'Toy mouse', fire: 'Cozy fire',
   };
   const WINTER_COSMETICS = { santa: 'Santa hat', antlers: 'Reindeer antlers', scarf: 'Cozy scarf', tree: 'Christmas tree', lights: 'String lights', gifts: 'Gift boxes',
@@ -1753,7 +1753,7 @@
   async function shareRoomFromGame() {
     const r = save.room || {};
     const lay = { v: 1, on: Array.isArray(r.on) ? r.on : [], slot: Object.assign({}, r.slot || { bed: 'cushion' }), level: save.level || 1 };
-    const key = save.lb.room + '|' + save.lb.name + '|' + JSON.stringify(lay);
+    const key = save.lb.room + '|' + save.lb.name + '|' + JSON.stringify(lay) + '|' + new Date().toDateString();   // and once a day, in case the row was cleared
     let sent = '', dev = '';
     try { sent = localStorage.getItem('jasperdoku.roomSent') || ''; dev = localStorage.getItem('jasperdoku.deviceKey') || ''; } catch (e) { return; }
     if (sent === key) return;
@@ -1764,6 +1764,13 @@
     const res = await rpc('save_room', { p_room: save.lb.room, p_player: save.lb.name, p_layout: lay, p_device: dev });
     if (res === 'taken') { localStorage.setItem('jasperdoku.nameTaken', save.lb.name); return; }
     localStorage.setItem('jasperdoku.roomSent', key); localStorage.removeItem('jasperdoku.nameTaken');
+  }
+  // has someone left Jasper a gift? (it's opened in his room; here it only shows on the home screen)
+  async function peekGifts() {
+    let dev = ''; try { dev = localStorage.getItem('jasperdoku.deviceKey') || ''; } catch (e) { return; }
+    if (!dev) return;
+    const n = await rpc('gifts_waiting', { p_room: save.lb.room, p_player: save.lb.name, p_device: dev });
+    if (typeof n === 'number' && n !== (save.lb.giftsWaiting || 0)) { save.lb.giftsWaiting = n; persist(); }
   }
   let lbBusy = null;
   function lbSync(force) {
@@ -1808,6 +1815,7 @@
           save.lb.pending.shift(); persist();
         }
         try { await shareRoomFromGame(); } catch (e) { /* the room goes next time */ }
+        try { await peekGifts(); } catch (e) { /* checked again next time */ }
         const rows = await rpc('get_scores', { p_room: save.lb.room, p_since: save.lb.since || '1970-01-01T00:00:00Z' });
         if (rows && rows.length) {
           save.lb.rows = save.lb.rows.concat(rows.map((r) => [r.player, r.puzzle, r.time_sec, r.mistakes, r.hints, r.created_at]));
